@@ -15,32 +15,104 @@
  */
 package org.ehcache.management.registry;
 
-import org.ehcache.management.config.StatisticsProviderConfiguration;
-import org.ehcache.management.providers.ManagementProvider;
-import org.ehcache.spi.service.ServiceCreationConfiguration;
+import org.ehcache.management.ManagementRegistryService;
+import org.ehcache.management.ManagementRegistryServiceConfiguration;
+import org.terracotta.management.model.context.Context;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * @author Ludovic Orban
- */
-public class DefaultManagementRegistryConfiguration implements ServiceCreationConfiguration<DefaultManagementRegistry> {
+public class DefaultManagementRegistryConfiguration implements ManagementRegistryServiceConfiguration {
 
-  private final Map<Class<? extends ManagementProvider>, StatisticsProviderConfiguration<?>> configurationMap = new HashMap<Class<? extends ManagementProvider>, StatisticsProviderConfiguration<?>>();
+  private static final AtomicLong COUNTER = new AtomicLong();
 
-  public DefaultManagementRegistryConfiguration addConfiguration(StatisticsProviderConfiguration<?> configuration) {
-    Class<? extends ManagementProvider> serviceType = configuration.getStatisticsProviderType();
-    configurationMap.put(serviceType, configuration);
+  private final Collection<String> tags = new TreeSet<>();
+  private Context context = Context.empty();
+  private String collectorExecutorAlias = "collectorExecutor";
+
+  public DefaultManagementRegistryConfiguration() {
+    setCacheManagerAlias("cache-manager-" + COUNTER.getAndIncrement());
+  }
+
+  public DefaultManagementRegistryConfiguration setCacheManagerAlias(String alias) {
+    return setContext(Context.create("cacheManagerName", alias));
+  }
+
+  public DefaultManagementRegistryConfiguration setContext(Context context) {
+    if (!this.context.contains("cacheManagerName") && !context.contains("cacheManagerName")) {
+      throw new IllegalArgumentException("'cacheManagerName' is missing from context");
+    }
+    this.context = this.context.with(context);
     return this;
   }
 
-  public StatisticsProviderConfiguration getConfigurationFor(Class<? extends ManagementProvider<?>> managementProviderClass) {
-    return configurationMap.get(managementProviderClass);
+  public DefaultManagementRegistryConfiguration setCollectorExecutorAlias(String collectorExecutorAlias) {
+    this.collectorExecutorAlias = collectorExecutorAlias;
+    return this;
+  }
+
+  public DefaultManagementRegistryConfiguration addTags(String... tags) {
+    this.tags.addAll(Arrays.asList(tags));
+    return this;
+  }
+
+  public DefaultManagementRegistryConfiguration addTag(String tag) {
+    return addTags(tag);
   }
 
   @Override
-  public Class<DefaultManagementRegistry> getServiceType() {
-    return DefaultManagementRegistry.class;
+  public Context getContext() {
+    return context;
   }
+
+  public String getCacheManagerAlias() {
+    return getContext().get("cacheManagerName");
+  }
+
+  @Override
+  public String getCollectorExecutorAlias() {
+    return this.collectorExecutorAlias;
+  }
+
+  @Override
+  public Collection<String> getTags() {
+    return tags;
+  }
+
+  @Override
+  public Class<ManagementRegistryService> getServiceType() {
+    return ManagementRegistryService.class;
+  }
+
+  @Override
+  public String toString() {
+    return "DefaultManagementRegistryConfiguration{" + "context=" + context +
+        ", tags=" + tags +
+        ", collectorExecutorAlias='" + collectorExecutorAlias + '\'' +
+        '}';
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+
+    DefaultManagementRegistryConfiguration that = (DefaultManagementRegistryConfiguration) o;
+
+    if (!tags.equals(that.tags)) return false;
+    if (!context.equals(that.context)) return false;
+    return collectorExecutorAlias != null ? collectorExecutorAlias.equals(that.collectorExecutorAlias) : that.collectorExecutorAlias == null;
+
+  }
+
+  @Override
+  public int hashCode() {
+    int result = tags.hashCode();
+    result = 31 * result + context.hashCode();
+    result = 31 * result + (collectorExecutorAlias != null ? collectorExecutorAlias.hashCode() : 0);
+    return result;
+  }
+
 }

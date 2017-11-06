@@ -16,30 +16,38 @@
 
 package org.ehcache;
 
-import org.ehcache.exceptions.CachePersistenceException;
-
 /**
- * A CacheManager that knows how to lifecycle {@link org.ehcache.Cache} data that outlive the JVM's process existence.
- *
- * @author Alex Snaps
+ * A {@link CacheManager} that knows how to lifecycle caches that can outlive the JVM.
  */
 public interface PersistentCacheManager extends CacheManager {
 
   /**
-   * Lets you manipulate the persistent data structures for this {@link org.ehcache.PersistentCacheManager}
+   * Destroys all persistent data associated with this {@code PersistentCacheManager}.
+   * <p>
+   * This is achieved by putting the {@code CacheManager} in {@link Status#MAINTENANCE MAINTENANCE} mode,
+   * executing the destroy and then exiting the {@code MAINTENANCE} mode.
    *
-   * @return a {@link org.ehcache.Maintainable} for this {@link org.ehcache.PersistentCacheManager}
-   * @throws java.lang.IllegalStateException if state {@link org.ehcache.Status#MAINTENANCE} couldn't be reached
+   * @throws IllegalStateException if state maintenance couldn't be reached
+   * @throws CachePersistenceException when something goes wrong destroying the persistent data
    */
-  Maintainable toMaintenance();
+  void destroy() throws CachePersistenceException;
 
   /**
    * Destroys all data persistent data associated with the aliased {@link Cache} instance managed
-   * by this {@link org.ehcache.CacheManager}
+   * by this {@link org.ehcache.CacheManager}.
+   * <p>
+   * This requires the {@code CacheManager} to be either in {@link Status#AVAILABLE AVAILABLE} or
+   * {@link Status#MAINTENANCE MAINTENANCE} mode.
+   * <ul>
+   *   <li>If the {@code CacheManager} is {@code AVAILABLE}, the operation is executed without lifecycle interactions.</li>
+   *   <li>If the {@code CacheManager} is not {@code AVAILABLE} then it attempts to go into {@code MAINTENANCE}.
+   *   Upon success, the {@code destroyCache} operation is performed and then {@code MAINTENANCE} mode is exited.
+   *   On failure, an exception will be thrown and no destroy will have happened.</li>
+   * </ul>
    *
    * @param alias the {@link org.ehcache.Cache}'s alias to destroy all persistent data from
    *
-   * @throws CachePersistenceException When something goes wrong destroying the persistent data
+   * @throws CachePersistenceException when something goes wrong destroying the persistent data
    */
   void destroyCache(String alias) throws CachePersistenceException;
 

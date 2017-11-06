@@ -17,169 +17,233 @@ package org.ehcache.docs;
 
 import org.ehcache.Cache;
 import org.ehcache.CacheManager;
-import org.ehcache.CacheManagerBuilder;
 import org.ehcache.config.CacheConfiguration;
-import org.ehcache.config.CacheConfigurationBuilder;
-import org.ehcache.config.ResourcePoolsBuilder;
-import org.ehcache.config.units.EntryUnit;
-import org.ehcache.management.ManagementRegistry;
-import org.ehcache.management.registry.DefaultManagementRegistry;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.CacheManagerBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
+import org.ehcache.config.units.MemoryUnit;
+import org.ehcache.management.ManagementRegistryService;
+import org.ehcache.management.SharedManagementService;
+import org.ehcache.management.providers.statistics.StatsUtil;
+import org.ehcache.management.registry.DefaultManagementRegistryConfiguration;
+import org.ehcache.management.registry.DefaultManagementRegistryService;
+import org.ehcache.management.registry.DefaultSharedManagementService;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
 import org.junit.Test;
-import org.terracotta.management.capabilities.Capability;
-import org.terracotta.management.capabilities.context.CapabilityContext;
-import org.terracotta.management.capabilities.descriptors.Descriptor;
-import org.terracotta.management.context.ContextContainer;
-import org.terracotta.management.stats.primitive.Counter;
+import org.terracotta.management.model.call.Parameter;
+import org.terracotta.management.model.capabilities.Capability;
+import org.terracotta.management.model.capabilities.context.CapabilityContext;
+import org.terracotta.management.model.capabilities.descriptors.Descriptor;
+import org.terracotta.management.model.context.Context;
+import org.terracotta.management.model.context.ContextContainer;
+import org.terracotta.management.model.stats.ContextualStatistics;
+import org.terracotta.management.registry.ResultSet;
+import org.terracotta.management.registry.StatisticQuery;
 
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 
-
-/**
- * @author Ludovic Orban
- */
 public class ManagementTest {
 
   @Test
   public void usingManagementRegistry() throws Exception {
     // tag::usingManagementRegistry[]
-    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder()
-        .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder().heap(10, EntryUnit.ENTRIES).build())
-        .buildConfig(Long.class, String.class);
 
-    ManagementRegistry managementRegistry = new DefaultManagementRegistry(); // <1>
-    CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-        .withCache("aCache", cacheConfiguration)
-        .using(managementRegistry) // <2>
-        .build(true);
+    CacheManager cacheManager = null;
+    try {
+      DefaultManagementRegistryConfiguration registryConfiguration = new DefaultManagementRegistryConfiguration().setCacheManagerAlias("myCacheManager1"); // <1>
+      ManagementRegistryService managementRegistry = new DefaultManagementRegistryService(registryConfiguration); // <2>
 
+      CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class,
+        ResourcePoolsBuilder.newResourcePoolsBuilder().heap(1, MemoryUnit.MB).offheap(2, MemoryUnit.MB))
+        .build();
 
-    Cache<Long, String> aCache = cacheManager.getCache("aCache", Long.class, String.class);
-    aCache.get(0L); // <3>
-    aCache.get(0L);
-    aCache.get(0L);
+      cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
+          .withCache("myCache", cacheConfiguration)
+          .using(managementRegistry) // <3>
+          .build(true);
 
-    Map<String, String> context = createContext(managementRegistry); // <4>
+      Object o = managementRegistry.withCapability("StatisticCollectorCapability")
+        .call("updateCollectedStatistics",
+          new Parameter("StatisticsCapability"),
+          new Parameter(Arrays.asList("Cache:HitCount", "Cache:MissCount"), Collection.class.getName()))
+        .on(Context.create("cacheManagerName", "myCacheManager1"))
+        .build()
+        .execute()
+        .getSingleResult();
+      System.out.println(o);
 
-    Collection<Counter> counters = managementRegistry.collectStatistics(context, "org.ehcache.management.providers.statistics.EhcacheStatisticsProvider", "GetCounter"); // <5>
-    Assert.assertThat(counters.size(), Matchers.is(1));
-    Counter getCounter = counters.iterator().next();
+      Cache<Long, String> aCache = cacheManager.getCache("myCache", Long.class, String.class);
+      aCache.put(1L, "one");
+      aCache.put(0L, "zero");
+      aCache.get(1L); // <4>
+      aCache.get(0L); // <4>
+      aCache.get(0L);
+      aCache.get(0L);
 
-    Assert.assertThat(getCounter.getValue(), Matchers.equalTo(3L)); // <6>
+      Context context = StatsUtil.createContext(managementRegistry); // <5>
 
-    cacheManager.close();
+      StatisticQuery query = managementRegistry.withCapability("StatisticsCapability") // <6>
+          .queryStatistic("Cache:HitCount")
+          .on(context)
+          .build();
+
+      ResultSet<ContextualStatistics> counters = query.execute();
+
+      ContextualStatistics statisticsContext = counters.getResult(context);
+
+      Assert.assertThat(counters.size(), Matchers.is(1));
+    }
+    finally {
+      if(cacheManager != null) cacheManager.close();
+    }
     // end::usingManagementRegistry[]
   }
 
   @Test
   public void capabilitiesAndContexts() throws Exception {
     // tag::capabilitiesAndContexts[]
-    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder()
-        .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder().heap(10, EntryUnit.ENTRIES).build())
-        .buildConfig(Long.class, String.class);
+    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class, ResourcePoolsBuilder.heap(10))
+        .build();
 
-    ManagementRegistry managementRegistry = new DefaultManagementRegistry();
-    CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-        .withCache("aCache", cacheConfiguration)
-        .using(managementRegistry)
-        .build(true);
-
-
-    Collection<Capability> capabilities = managementRegistry.capabilities(); // <1>
-    Assert.assertThat(capabilities.isEmpty(), Matchers.is(false));
-    Capability capability = capabilities.iterator().next();
-    String capabilityName = capability.getName(); // <2>
-    Collection<Descriptor> capabilityDescriptions = capability.getDescriptions(); // <3>
-    Assert.assertThat(capabilityDescriptions.isEmpty(), Matchers.is(false));
-    CapabilityContext capabilityContext = capability.getCapabilityContext();
-    Collection<CapabilityContext.Attribute> attributes = capabilityContext.getAttributes(); // <4>
-    Assert.assertThat(attributes.size(), Matchers.is(2));
-    Iterator<CapabilityContext.Attribute> iterator = attributes.iterator();
-    CapabilityContext.Attribute attribute1 = iterator.next();
-    Assert.assertThat(attribute1.getName(), Matchers.equalTo("cacheManagerName"));  // <5>
-    Assert.assertThat(attribute1.isRequired(), Matchers.is(true));
-    CapabilityContext.Attribute attribute2 = iterator.next();
-    Assert.assertThat(attribute2.getName(), Matchers.equalTo("cacheName")); // <6>
-    Assert.assertThat(attribute2.isRequired(), Matchers.is(true));
-
-    Collection<ContextContainer> contexts = managementRegistry.contexts();  // <7>
-    Assert.assertThat(contexts.size(), Matchers.is(1));
-    ContextContainer contextContainer = contexts.iterator().next();
-    Assert.assertThat(contextContainer.getName(), Matchers.equalTo("cacheManagerName"));  // <8>
-    Assert.assertThat(contextContainer.getValue(), Matchers.startsWith("cache-manager-"));
-    Collection<ContextContainer> subContexts = contextContainer.getSubContexts();
-    Assert.assertThat(subContexts.size(), Matchers.is(1));
-    ContextContainer subContextContainer = subContexts.iterator().next();
-    Assert.assertThat(subContextContainer.getName(), Matchers.equalTo("cacheName"));  // <9>
-    Assert.assertThat(subContextContainer.getValue(), Matchers.equalTo("aCache"));
+    CacheManager cacheManager = null;
+    try {
+      ManagementRegistryService managementRegistry = new DefaultManagementRegistryService();
+      cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
+          .withCache("aCache", cacheConfiguration)
+          .using(managementRegistry)
+          .build(true);
 
 
-    cacheManager.close();
+      Collection<? extends Capability> capabilities = managementRegistry.getCapabilities(); // <1>
+      Assert.assertThat(capabilities.isEmpty(), Matchers.is(false));
+      Capability capability = capabilities.iterator().next();
+      String capabilityName = capability.getName(); // <2>
+      Collection<? extends Descriptor> capabilityDescriptions = capability.getDescriptors(); // <3>
+      Assert.assertThat(capabilityDescriptions.isEmpty(), Matchers.is(false));
+      CapabilityContext capabilityContext = capability.getCapabilityContext();
+      Collection<CapabilityContext.Attribute> attributes = capabilityContext.getAttributes(); // <4>
+      Assert.assertThat(attributes.size(), Matchers.is(2));
+      Iterator<CapabilityContext.Attribute> iterator = attributes.iterator();
+      CapabilityContext.Attribute attribute1 = iterator.next();
+      Assert.assertThat(attribute1.getName(), Matchers.equalTo("cacheManagerName"));  // <5>
+      Assert.assertThat(attribute1.isRequired(), Matchers.is(true));
+      CapabilityContext.Attribute attribute2 = iterator.next();
+      Assert.assertThat(attribute2.getName(), Matchers.equalTo("cacheName")); // <6>
+      Assert.assertThat(attribute2.isRequired(), Matchers.is(true));
+
+      ContextContainer contextContainer = managementRegistry.getContextContainer();  // <7>
+      Assert.assertThat(contextContainer.getName(), Matchers.equalTo("cacheManagerName"));  // <8>
+      Assert.assertThat(contextContainer.getValue(), Matchers.startsWith("cache-manager-"));
+      Collection<ContextContainer> subContexts = contextContainer.getSubContexts();
+      Assert.assertThat(subContexts.size(), Matchers.is(1));
+      ContextContainer subContextContainer = subContexts.iterator().next();
+      Assert.assertThat(subContextContainer.getName(), Matchers.equalTo("cacheName"));  // <9>
+      Assert.assertThat(subContextContainer.getValue(), Matchers.equalTo("aCache"));
+    }
+    finally {
+      if(cacheManager != null) cacheManager.close();
+    }
+
     // end::capabilitiesAndContexts[]
   }
 
   @Test
   public void actionCall() throws Exception {
     // tag::actionCall[]
-    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder()
-        .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder().heap(10, EntryUnit.ENTRIES).build())
-        .buildConfig(Long.class, String.class);
+    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class, ResourcePoolsBuilder.heap(10))
+        .build();
 
-    ManagementRegistry managementRegistry = new DefaultManagementRegistry();
-    CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-        .withCache("aCache", cacheConfiguration)
-        .using(managementRegistry)
-        .build(true);
+    CacheManager cacheManager = null;
+    try {
+      ManagementRegistryService managementRegistry = new DefaultManagementRegistryService();
+      cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
+          .withCache("aCache", cacheConfiguration)
+          .using(managementRegistry)
+          .build(true);
 
-    Cache<Long, String> aCache = cacheManager.getCache("aCache", Long.class, String.class);
-    aCache.put(0L, "zero"); // <1>
+      Cache<Long, String> aCache = cacheManager.getCache("aCache", Long.class, String.class);
+      aCache.put(0L, "zero"); // <1>
 
-    Map<String, String> context = createContext(managementRegistry); // <2>
+      Context context = StatsUtil.createContext(managementRegistry); // <2>
 
-    managementRegistry.callAction(context, "org.ehcache.management.providers.actions.EhcacheActionProvider", "clear", new String[0], new Object[0]); // <3>
+      managementRegistry.withCapability("ActionsCapability") // <3>
+          .call("clear")
+          .on(context)
+          .build()
+          .execute();
 
-    Assert.assertThat(aCache.get(0L), Matchers.is(Matchers.nullValue())); // <4>
-
-    cacheManager.close();
+      Assert.assertThat(aCache.get(0L), Matchers.is(Matchers.nullValue())); // <4>
+    }
+    finally {
+      if(cacheManager != null) cacheManager.close();
+    }
     // end::actionCall[]
   }
 
-  @Test
+  //TODO update managingMultipleCacheManagers() documentation/asciidoc
   public void managingMultipleCacheManagers() throws Exception {
     // tag::managingMultipleCacheManagers[]
-    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder()
-        .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder().heap(10, EntryUnit.ENTRIES).build())
-        .buildConfig(Long.class, String.class);
+    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class, ResourcePoolsBuilder.heap(10))
+        .build();
 
-    ManagementRegistry managementRegistry = new DefaultManagementRegistry(); // <1>
-    CacheManager cacheManager1 = CacheManagerBuilder.newCacheManagerBuilder()
-        .withCache("aCache", cacheConfiguration)
-        .using(managementRegistry) // <2>
-        .build(true);
+    CacheManager cacheManager1 = null;
+    CacheManager cacheManager2 = null;
+    try {
+      SharedManagementService sharedManagementService = new DefaultSharedManagementService(); // <1>
+      cacheManager1 = CacheManagerBuilder.newCacheManagerBuilder()
+          .withCache("aCache", cacheConfiguration)
+          .using(new DefaultManagementRegistryConfiguration().setCacheManagerAlias("myCacheManager-1"))
+          .using(sharedManagementService) // <2>
+          .build(true);
 
-    CacheManager cacheManager2 = CacheManagerBuilder.newCacheManagerBuilder()
-        .withCache("aCache", cacheConfiguration)
-        .using(managementRegistry) // <3>
-        .build(true);
+      cacheManager2 = CacheManagerBuilder.newCacheManagerBuilder()
+          .withCache("aCache", cacheConfiguration)
+          .using(new DefaultManagementRegistryConfiguration().setCacheManagerAlias("myCacheManager-2"))
+          .using(sharedManagementService) // <3>
+          .build(true);
 
-    cacheManager2.close();
-    cacheManager1.close();
+      Context context1 = Context.empty()
+        .with("cacheManagerName", "myCacheManager-1")
+        .with("cacheName", "aCache");
+
+      Context context2 = Context.empty()
+        .with("cacheManagerName", "myCacheManager-2")
+        .with("cacheName", "aCache");
+
+      Cache<Long, String> cache = cacheManager1.getCache("aCache", Long.class, String.class);
+      cache.get(1L);//cache miss
+      cache.get(2L);//cache miss
+
+      StatisticQuery query = sharedManagementService.withCapability("StatisticsCapability")
+        .queryStatistic("Cache:MissCount")
+        .on(context1)
+        .on(context2)
+        .build();
+
+      long val = 0;
+      // it could be several seconds before the sampled stats could become available
+      // let's try until we find the correct value : 2
+      do {
+        ResultSet<ContextualStatistics> counters = query.execute();
+
+        ContextualStatistics statisticsContext1 = counters.getResult(context1);
+
+        Number counterContext1 = statisticsContext1.getStatistic("Cache:MissCount");
+
+        // miss count is a sampled stat, for example its values could be [0,1,2].
+        // In the present case, only the last value is important to us , the cache was eventually missed 2 times
+        val = counterContext1.longValue();
+      } while(val != 2);
+    }
+    finally {
+      if(cacheManager2 != null) cacheManager2.close();
+      if(cacheManager1 != null) cacheManager1.close();
+    }
+
     // end::managingMultipleCacheManagers[]
-  }
-
-  private static Map<String, String> createContext(ManagementRegistry managementRegistry) {
-    Map<String, String> result = new HashMap<String, String>();
-    Collection<ContextContainer> contexts = managementRegistry.contexts();
-    ContextContainer contextContainer = contexts.iterator().next();
-    ContextContainer subContextContainer = contextContainer.getSubContexts().iterator().next();
-
-    result.put(contextContainer.getName(), contextContainer.getValue());
-    result.put(subContextContainer.getName(), subContextContainer.getValue());
-    return result;
   }
 
 }

@@ -2,7 +2,7 @@
 
 build/
 */src/generated/
-/.gradle/
+.gradle/
 
 .project
 .classpath
@@ -12,6 +12,11 @@ build/
 
 *.iml
 .idea
+out/
 
 .nb-gradle
 .nb-gradle-properties
+
+/classes
+
+**/*.*~

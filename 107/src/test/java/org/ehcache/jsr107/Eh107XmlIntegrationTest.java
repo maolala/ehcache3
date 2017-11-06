@@ -19,6 +19,7 @@ import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.pany.domain.Client;
 import com.pany.domain.Customer;
 import com.pany.domain.Product;
 import com.pany.ehcache.Test107CacheEntryListener;
@@ -56,7 +57,6 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
 
@@ -92,6 +92,7 @@ public class Eh107XmlIntegrationTest {
       }
     });
 
+    @SuppressWarnings("unchecked")
     CompleteConfiguration<Long, String> configuration = cache.getConfiguration(CompleteConfiguration.class);
     assertThat(configuration, notNullValue());
     assertThat(configuration.isStoreByValue(), is(true));
@@ -105,14 +106,9 @@ public class Eh107XmlIntegrationTest {
     CacheManager cacheManager = cachingProvider.getCacheManager(getClass().getResource("/ehcache-107-listeners.xml")
         .toURI(), getClass().getClassLoader());
 
-    MutableConfiguration<String, String> configuration = new MutableConfiguration<String, String>();
+    MutableConfiguration<String, String> configuration = new MutableConfiguration<>();
     configuration.setTypes(String.class, String.class);
-    MutableCacheEntryListenerConfiguration<String, String> listenerConfiguration = new MutableCacheEntryListenerConfiguration<String, String>(new Factory<CacheEntryListener<? super String, ? super String>>() {
-      @Override
-      public CacheEntryListener<? super String, ? super String> create() {
-        return new Test107CacheEntryListener();
-      }
-    }, null, false, true);
+    MutableCacheEntryListenerConfiguration<String, String> listenerConfiguration = new MutableCacheEntryListenerConfiguration<>(Test107CacheEntryListener::new, null, false, true);
     configuration.addCacheEntryListenerConfiguration(listenerConfiguration);
 
     Cache<String, String> cache = cacheManager.createCache("foos", configuration);
@@ -127,14 +123,11 @@ public class Eh107XmlIntegrationTest {
     final AtomicBoolean loaderFactoryInvoked = new AtomicBoolean(false);
     final DumbCacheLoader product2CacheLoader = new DumbCacheLoader();
 
-    MutableConfiguration<Long, Product> product2Configuration = new MutableConfiguration<Long, Product>();
+    MutableConfiguration<Long, Product> product2Configuration = new MutableConfiguration<>();
     product2Configuration.setTypes(Long.class, Product.class).setReadThrough(true);
-    product2Configuration.setCacheLoaderFactory(new Factory<CacheLoader<Long, Product>>() {
-      @Override
-      public CacheLoader<Long, Product> create() {
-        loaderFactoryInvoked.set(true);
-        return product2CacheLoader;
-      }
+    product2Configuration.setCacheLoaderFactory(() -> {
+      loaderFactoryInvoked.set(true);
+      return product2CacheLoader;
     });
 
     Cache<Long, Product> productCache2 = cacheManager.createCache("productCache2", product2Configuration);
@@ -156,14 +149,11 @@ public class Eh107XmlIntegrationTest {
   @Test
   public void test107ExpiryOverriddenByEhcacheTemplateExpiry() {
     final AtomicBoolean expiryFactoryInvoked = new AtomicBoolean(false);
-    MutableConfiguration<Long, Product> configuration = new MutableConfiguration<Long, Product>();
+    MutableConfiguration<Long, Product> configuration = new MutableConfiguration<>();
     configuration.setTypes(Long.class, Product.class);
-    configuration.setExpiryPolicyFactory(new Factory<ExpiryPolicy>() {
-      @Override
-      public ExpiryPolicy create() {
-        expiryFactoryInvoked.set(true);
-        return new CreatedExpiryPolicy(Duration.FIVE_MINUTES);
-      }
+    configuration.setExpiryPolicyFactory(() -> {
+      expiryFactoryInvoked.set(true);
+      return new CreatedExpiryPolicy(Duration.FIVE_MINUTES);
     });
 
     cacheManager.createCache("productCache3", configuration);
@@ -203,9 +193,24 @@ public class Eh107XmlIntegrationTest {
     assertThat(customerCache.get(1L).getId(), equalTo(customer.getId()));
   }
 
+  @Test
+  public void testCopierAtServiceLevel() throws Exception {
+    CacheManager cacheManager = cachingProvider.getCacheManager(
+        getClass().getResource("/ehcache-107-default-copiers.xml").toURI(),
+        getClass().getClassLoader());
+
+    MutableConfiguration<Long, Client> config = new MutableConfiguration<>();
+    config.setTypes(Long.class, Client.class);
+    Cache<Long, Client> bar = cacheManager.createCache("bar", config);
+    Client client = new Client("tc", 1000000L);
+    long key = 42L;
+    bar.put(key, client);
+    assertThat(bar.get(key), not(sameInstance(client)));
+  }
+
   static class DumbCacheLoader implements CacheLoader<Long, Product> {
 
-    Set<Long> seen = new HashSet<Long>();
+    Set<Long> seen = new HashSet<>();
 
     @Override
     public Product load(Long aLong) throws CacheLoaderException {

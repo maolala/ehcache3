@@ -1,10 +1,9 @@
 ---
 ---
-ifndef::sourcedir[]
-include::common.adoc[]
-endif::sourcedir[]
-
 = Examples
+ifndef::sourcedir34[]
+include::common.adoc[]
+endif::sourcedir34[]
 
 ifdef::notBuildingForSite[]
 include::menu.adoc[]
@@ -12,19 +11,19 @@ endif::notBuildingForSite[]
 
 == Peeper - a simple message board
 
-The `demo` directory in the Ehcache 3.0 sources includes a sample applications with two (2)
+The `demo` directory in the Ehcache 3 sources includes a sample applications with two (2)
 implementations demonstrating Ehcache use.  Implemented as a simple
-browser-based web service, the sample application, Peeper, displays any messages (_peeps_)
-previously entered and accepts new peeps recording the peeps in a database.  The peeps
+browser-based web service, the sample application Peeper displays any messages (_peeps_)
+previously entered and accepts new peeps, recording the peeps in a database.  The peeps
 database, shared among implementations of the Peeper application, is located at
 +$HOME/ehcache-demo-peeper.mv.db+.  This file may be safely erased while the application
-is not running.  While running, information about the operation of Peeper application
+is not running.  While running, information about the operation of the Peeper application
 (database access, cache access, etc.) is written to the console.
 
 While the sample application may be run, the application is _very_ simplistic -- the code
 implementing the sample is the interesting bit. Running the sample application requires the
 use of https://gradle.org/[Gradle].  This sample may be accessed from GitHub by _cloning_
-the Ehcache 3.0 git repository:
+the Ehcache 3 git repository:
 
 [source,bash]
 ----
@@ -41,7 +40,7 @@ from the database to display the Peeper web page.  To run this implementation:
 [source,bash]
 ----
 cd ehcache3/demos/00-NoCache
-../../gradlew jettyRun
+../../gradlew appStart
 ----
 
 This builds the necessary components, starts a http://eclipse.org/jetty/[Jetty] web service,
@@ -67,7 +66,7 @@ Note the absence of indications of interactions with a cache.
 === Peeper with Cache-aside Caching -- +01-CacheAside+
 
 The second sample, located in +demos/01-CacheAside+, is a version of the Peeper application
-that makes use of Ehcache.  As each peep is being read from the database (for display in the web
+that makes use of Ehcache.  As each peep is read from the database (for display in the web
 page), it is written to an Ehcache instance.  If the Peeper web page is refreshed
 (without adding a new peep) or a new Peeper client connects, the peeps are read from
 the cache (instead of the database) to form the web page.  If a new peep is posted,
@@ -76,7 +75,7 @@ the cache is cleared.  To run this implementation:
 [source,bash]
 ----
 cd ehcache3/demos/01-CacheAside
-../../gradlew jettyRun
+../../gradlew appStart
 ----
 
 This builds the necessary components, starts a http://eclipse.org/jetty/[Jetty] web service,
@@ -100,10 +99,10 @@ While running, lines like the following are displayed to the console:
 ----
 Note the presence of the +Filling cache with peeps+, +Clearing peeps cache+, and +Getting peeps from cache+ lines indicating cache interactions.
 
-
+[[xml-with-107-extension]]
 == XML with 107 extension
 
 [source,xml,indent=0]
 ----
-include::{sourcedir}/107/src/test/resources/ehcache-example.xml[]
+include::{sourcedir34}/107/src/test/resources/ehcache-example.xml[]
 ----

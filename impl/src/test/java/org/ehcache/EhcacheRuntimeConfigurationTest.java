@@ -17,11 +17,12 @@
 package org.ehcache;
 
 import org.ehcache.config.CacheConfiguration;
-import org.ehcache.config.CacheConfigurationBuilder;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
 import org.ehcache.config.ResourcePools;
-import org.ehcache.config.ResourcePoolsBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import org.ehcache.config.ResourceType;
-import org.ehcache.config.persistence.CacheManagerPersistenceConfiguration;
+import org.ehcache.config.builders.CacheManagerBuilder;
+import org.ehcache.impl.config.persistence.CacheManagerPersistenceConfiguration;
 import org.ehcache.config.units.EntryUnit;
 import org.junit.Test;
 
@@ -38,9 +39,9 @@ public class EhcacheRuntimeConfigurationTest {
 
   @Test
   public void testUpdateResources() {
-    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder()
-        .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder()
-            .heap(10L, EntryUnit.ENTRIES).disk(10, MemoryUnit.MB).build()).buildConfig(Long.class, String.class);
+    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class,
+        ResourcePoolsBuilder.newResourcePoolsBuilder()
+            .heap(10L, EntryUnit.ENTRIES).disk(10, MemoryUnit.MB).build()).build();
 
     final CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
         .with(new CacheManagerPersistenceConfiguration(new File(System.getProperty("java.io.tmpdir") + "/myData")))
@@ -54,11 +55,8 @@ public class EhcacheRuntimeConfigurationTest {
     cache.getRuntimeConfiguration().updateResourcePools(pools);
     assertThat(cache.getRuntimeConfiguration().getResourcePools()
         .getPoolForResource(ResourceType.Core.HEAP).getSize(), is(20L));
-    poolsBuilder = poolsBuilder.disk(20L, MemoryUnit.MB);
     pools = poolsBuilder.build();
     cache.getRuntimeConfiguration().updateResourcePools(pools);
-    assertThat(cache.getRuntimeConfiguration().getResourcePools()
-        .getPoolForResource(ResourceType.Core.DISK).getSize(), is(20L));
     assertThat(cache.getRuntimeConfiguration().getResourcePools()
         .getPoolForResource(ResourceType.Core.HEAP).getSize(), is(20L));
     cacheManager.close();
@@ -66,9 +64,9 @@ public class EhcacheRuntimeConfigurationTest {
 
   @Test
   public void testUpdateFailureDoesNotUpdate() {
-    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder()
-        .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder()
-            .heap(10L, EntryUnit.ENTRIES).build()).buildConfig(Long.class, String.class);
+    CacheConfiguration<Long, String> cacheConfiguration = CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class,
+        ResourcePoolsBuilder.newResourcePoolsBuilder()
+            .heap(10L, EntryUnit.ENTRIES).build()).build();
 
     final CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
         .withCache("cache", cacheConfiguration).build(true);

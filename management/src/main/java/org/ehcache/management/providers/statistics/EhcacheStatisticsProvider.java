@@ -15,109 +15,75 @@
  */
 package org.ehcache.management.providers.statistics;
 
-import org.ehcache.Ehcache;
-import org.ehcache.management.config.StatisticsProviderConfiguration;
-import org.ehcache.management.providers.ManagementProvider;
-import org.ehcache.management.utils.ContextHelper;
-import org.ehcache.util.ConcurrentWeakIdentityHashMap;
-import org.terracotta.management.capabilities.context.CapabilityContext;
-import org.terracotta.management.capabilities.descriptors.Descriptor;
-import org.terracotta.management.stats.Statistic;
+import org.ehcache.core.spi.service.StatisticsService;
+import org.ehcache.management.ManagementRegistryServiceConfiguration;
+import org.ehcache.management.providers.CacheBinding;
+import org.ehcache.management.providers.CacheBindingManagementProvider;
+import org.ehcache.management.providers.ExposedCacheBinding;
+import org.terracotta.management.model.capabilities.descriptors.Descriptor;
+import org.terracotta.management.model.capabilities.descriptors.StatisticDescriptor;
+import org.terracotta.management.model.context.Context;
+import org.terracotta.management.registry.Named;
+import org.terracotta.management.registry.ExposedObject;
+import org.terracotta.management.registry.collect.StatisticProvider;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.TreeMap;
 
-/**
- * @author Ludovic Orban
- */
-public class EhcacheStatisticsProvider implements ManagementProvider<Ehcache> {
+@Named("StatisticsCapability")
+@StatisticProvider
+public class EhcacheStatisticsProvider extends CacheBindingManagementProvider {
 
-  private final ConcurrentMap<Ehcache, EhcacheStatistics> statistics = new ConcurrentWeakIdentityHashMap<Ehcache, EhcacheStatistics>();
+  private static final Comparator<StatisticDescriptor> STATISTIC_DESCRIPTOR_COMPARATOR = Comparator.comparing(StatisticDescriptor::getName);
 
-  private final StatisticsProviderConfiguration configuration;
-  private final ScheduledExecutorService executor;
+  private final StatisticsService statisticsService;
 
-  public EhcacheStatisticsProvider(StatisticsProviderConfiguration statisticsProviderConfiguration, ScheduledExecutorService executor) {
-    this.configuration = statisticsProviderConfiguration;
-    this.executor = executor;
-  }
-
-  public StatisticsProviderConfiguration getConfiguration() {
-    return configuration;
+  public EhcacheStatisticsProvider(ManagementRegistryServiceConfiguration configuration, StatisticsService statisticsService) {
+    super(configuration);
+    this.statisticsService = statisticsService;
   }
 
   @Override
-  public void register(Ehcache ehcache) {
-    statistics.putIfAbsent(ehcache, createStatistics(ehcache));
-  }
-
-  EhcacheStatistics createStatistics(Ehcache ehcache) {
-    return new EhcacheStatistics(ehcache, configuration, executor);
+  protected ExposedCacheBinding wrap(CacheBinding cacheBinding) {
+    return new StandardEhcacheStatistics(registryConfiguration, cacheBinding, statisticsService);
   }
 
   @Override
-  public void unregister(Ehcache ehcache) {
-    EhcacheStatistics removed = statistics.remove(ehcache);
-    if (removed != null) {
-      removed.dispose();
+  public final Collection<? extends Descriptor> getDescriptors() {
+    Collection<StatisticDescriptor> capabilities = new HashSet<>();
+    for (ExposedObject o : getExposedObjects()) {
+      capabilities.addAll(((StandardEhcacheStatistics) o).getDescriptors());
     }
+    List<StatisticDescriptor> list = new ArrayList<>(capabilities);
+    Collections.sort(list, STATISTIC_DESCRIPTOR_COMPARATOR);
+    return list;
   }
 
   @Override
-  public Class<Ehcache> managedType() {
-    return Ehcache.class;
-  }
-
-  @Override
-  public Set<Descriptor> descriptions() {
-    Set<Descriptor> capabilities = new HashSet<Descriptor>();
-    for (EhcacheStatistics ehcacheStatistics : this.statistics.values()) {
-      capabilities.addAll(ehcacheStatistics.capabilities());
-    }
-    return capabilities;
-  }
-
-  @Override
-  public CapabilityContext capabilityContext() {
-    return new CapabilityContext(Arrays.asList(new CapabilityContext.Attribute("cacheManagerName", true), new CapabilityContext.Attribute("cacheName", true)));
-  }
-
-  @Override
-  public Collection<Statistic<?>> collectStatistics(Map<String, String> context, String... statisticNames) {
-    String cacheManagerName = context.get("cacheManagerName");
-    if (cacheManagerName == null) {
-      throw new IllegalArgumentException("Missing cache manager name from context");
-    }
-    String cacheName = context.get("cacheName");
-    if (cacheName == null) {
-      throw new IllegalArgumentException("Missing cache name from context");
-    }
-
-    for (Map.Entry<Ehcache, EhcacheStatistics> entry : statistics.entrySet()) {
-      if (!ContextHelper.findCacheManagerName(entry.getKey()).equals(cacheManagerName) ||
-          !ContextHelper.findCacheName(entry.getKey()).equals(cacheName)) {
-        continue;
+  public Map<String, Number> collectStatistics(Context context, Collection<String> statisticNames) {
+    StandardEhcacheStatistics ehcacheStatistics = (StandardEhcacheStatistics) findExposedObject(context);
+    if (ehcacheStatistics != null) {
+      if (statisticNames == null || statisticNames.isEmpty()) {
+        return ehcacheStatistics.queryStatistics();
+      } else {
+        Map<String, Number> statistics = new TreeMap<>();
+        for (String statisticName : statisticNames) {
+          try {
+            statistics.put(statisticName, ehcacheStatistics.queryStatistic(statisticName));
+          } catch (IllegalArgumentException ignored) {
+            // ignore when statisticName does not exist and throws an exception
+          }
+        }
+        return statistics;
       }
-
-      Collection<Statistic<?>> result = new ArrayList<Statistic<?>>();
-      for (String statisticName : statisticNames) {
-        result.addAll(entry.getValue().queryStatistic(statisticName));
-      }
-      return result;
     }
-
-    throw new IllegalArgumentException("No such cache manager / cache pair : [" + cacheManagerName + " / " + cacheName + "]");
-  }
-
-  @Override
-  public Object callAction(Map<String, String> context, String methodName, String[] argClassNames, Object[] args) {
-    throw new UnsupportedOperationException("Not an action provider : " + getClass().getName());
+    return Collections.emptyMap();
   }
 
 }

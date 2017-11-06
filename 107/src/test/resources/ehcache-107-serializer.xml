@@ -6,18 +6,16 @@
     xsi:schemaLocation="http://www.ehcache.org/v3 ../../../../xml/src/main/resources/ehcache-core.xsd
                         http://www.ehcache.org/v3/jsr107 ../../main/resources/ehcache-107ext.xsd">
 
-  <ehcache:service>
-    <ehcache:default-serializers>
-      <ehcache:serializer type="java.lang.String">org.ehcache.internal.serialization.CompactJavaSerializer</ehcache:serializer>
-    </ehcache:default-serializers>
-  </ehcache:service>
+  <ehcache:default-serializers>
+    <ehcache:serializer type="java.lang.String">org.ehcache.impl.serialization.CompactJavaSerializer</ehcache:serializer>
+  </ehcache:default-serializers>
 
   <cache alias="cache">
     <key-type>java.lang.Long</key-type>
     <value-type>java.lang.String</value-type>
     <resources>
-      <heap size="20" unit="entries"/>
-      <offheap size="1" unit="mb"/>
+      <heap unit="entries">20</heap>
+      <offheap unit="MB">1</offheap>
     </resources>
   </cache>
 
@@ -25,8 +23,8 @@
     <key-type serializer = "org.ehcache.jsr107.LongSerializer">java.lang.Long</key-type>
     <value-type serializer = "org.ehcache.jsr107.StringSerializer">java.lang.String</value-type>
     <resources>
-      <heap size="20" unit="entries"/>
-      <offheap size="1" unit="mb"/>
+      <heap unit="entries">20</heap>
+      <offheap unit="MB">1</offheap>
     </resources>
   </cache>
 </config>

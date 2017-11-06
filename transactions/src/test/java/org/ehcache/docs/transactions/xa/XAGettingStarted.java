@@ -19,24 +19,22 @@ import bitronix.tm.BitronixTransactionManager;
 import bitronix.tm.TransactionManagerServices;
 import org.ehcache.Cache;
 import org.ehcache.CacheManager;
-import org.ehcache.CacheManagerBuilder;
 import org.ehcache.PersistentCacheManager;
-import org.ehcache.config.CacheConfigurationBuilder;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
 import org.ehcache.config.Configuration;
-import org.ehcache.config.ResourcePoolsBuilder;
-import org.ehcache.config.loaderwriter.DefaultCacheLoaderWriterConfiguration;
-import org.ehcache.config.persistence.CacheManagerPersistenceConfiguration;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
+import org.ehcache.config.builders.CacheManagerBuilder;
+import org.ehcache.impl.config.loaderwriter.DefaultCacheLoaderWriterConfiguration;
+import org.ehcache.impl.config.persistence.CacheManagerPersistenceConfiguration;
 import org.ehcache.config.units.EntryUnit;
 import org.ehcache.config.units.MemoryUnit;
-import org.ehcache.config.xml.XmlConfiguration;
-import org.ehcache.exceptions.BulkCacheWritingException;
+import org.ehcache.transactions.xa.txmgr.btm.BitronixTransactionManagerLookup;
+import org.ehcache.transactions.xa.txmgr.provider.LookupTransactionManagerProviderConfiguration;
+import org.ehcache.xml.XmlConfiguration;
+import org.ehcache.spi.loaderwriter.BulkCacheWritingException;
 import org.ehcache.spi.loaderwriter.CacheLoaderWriter;
 import org.ehcache.transactions.xa.XACacheException;
 import org.ehcache.transactions.xa.configuration.XAStoreConfiguration;
-import org.ehcache.transactions.xa.configuration.XAStoreProviderConfiguration;
-import org.ehcache.transactions.xa.txmgr.TransactionManagerWrapper;
-import org.ehcache.transactions.xa.txmgr.btm.BitronixXAResourceRegistry;
-import org.ehcache.transactions.xa.txmgr.provider.TransactionManagerProviderConfiguration;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -79,13 +77,11 @@ public class XAGettingStarted {
         TransactionManagerServices.getTransactionManager(); // <1>
 
     CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-        .using(new XAStoreProviderConfiguration()) // <2>
-        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder() // <3>
-            .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder() // <4>
-                    .heap(10, EntryUnit.ENTRIES)
-            )
+        .using(new LookupTransactionManagerProviderConfiguration(BitronixTransactionManagerLookup.class)) // <2>
+        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class, // <3>
+                                                            ResourcePoolsBuilder.heap(10)) // <4>
             .add(new XAStoreConfiguration("xaCache")) // <5>
-            .buildConfig(Long.class, String.class)
+            .build()
         )
         .build(true);
 
@@ -109,13 +105,11 @@ public class XAGettingStarted {
         TransactionManagerServices.getTransactionManager(); // <1>
 
     CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-        .using(new XAStoreProviderConfiguration()) // <2>
-        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder() // <3>
-            .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder() // <4>
-                    .heap(10, EntryUnit.ENTRIES)
-            )
+        .using(new LookupTransactionManagerProviderConfiguration(BitronixTransactionManagerLookup.class)) // <2>
+        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class, // <3>
+                                                            ResourcePoolsBuilder.heap(10)) // <4>
             .add(new XAStoreConfiguration("xaCache")) // <5>
-            .buildConfig(Long.class, String.class)
+            .build()
         )
         .build(true);
 
@@ -134,38 +128,7 @@ public class XAGettingStarted {
   }
 
   @Test
-  public void testXACacheWithSpecificJtaTm() throws Exception {
-    // tag::testXACacheWithSpecificJtaTm[]
-    BitronixTransactionManager transactionManager =
-        TransactionManagerServices.getTransactionManager(); // <1>
-
-    CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-        .using(new XAStoreProviderConfiguration()) // <2>
-        .using(new TransactionManagerProviderConfiguration(
-            new TransactionManagerWrapper(transactionManager, new BitronixXAResourceRegistry()))) // <3>
-        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder() // <4>
-            .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder() // <5>
-                    .heap(10, EntryUnit.ENTRIES)
-            )
-            .add(new XAStoreConfiguration("xaCache")) // <6>
-            .buildConfig(Long.class, String.class)
-        )
-        .build(true);
-
-    final Cache<Long, String> xaCache = cacheManager.getCache("xaCache", Long.class, String.class);
-
-    transactionManager.begin(); // <7>
-    {
-      xaCache.put(1L, "one"); // <8>
-    }
-    transactionManager.commit(); // <9>
-
-    cacheManager.close();
-    transactionManager.shutdown();
-    // end::testXACacheWithSpecificJtaTm[]
-  }
-
-  @Test
+  @SuppressWarnings("unchecked")
   public void testXACacheWithWriteThrough() throws Exception {
     // tag::testXACacheWithWriteThrough[]
     BitronixTransactionManager transactionManager =
@@ -174,14 +137,12 @@ public class XAGettingStarted {
     Class<CacheLoaderWriter<?, ?>> klazz = (Class<CacheLoaderWriter<?, ?>>) (Class) (SampleLoaderWriter.class);
 
     CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-        .using(new XAStoreProviderConfiguration()) // <2>
-        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder() // <3>
-                .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder() // <4>
-                        .heap(10, EntryUnit.ENTRIES)
-                )
+        .using(new LookupTransactionManagerProviderConfiguration(BitronixTransactionManagerLookup.class)) // <2>
+        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class, // <3>
+                                                            ResourcePoolsBuilder.heap(10)) // <4>
                 .add(new XAStoreConfiguration("xaCache")) // <5>
                 .add(new DefaultCacheLoaderWriterConfiguration(klazz, singletonMap(1L, "eins"))) // <6>
-                .buildConfig(Long.class, String.class)
+                .build()
         )
         .build(true);
 
@@ -206,16 +167,16 @@ public class XAGettingStarted {
         TransactionManagerServices.getTransactionManager(); // <1>
 
     PersistentCacheManager persistentCacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-        .using(new XAStoreProviderConfiguration()) // <2>
-        .with(new CacheManagerPersistenceConfiguration(new File(getStoragePath(), "testXACacheWithThreeTiers"))) // <3>
-        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder() // <4>
-                .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder() // <5>
+        .using(new LookupTransactionManagerProviderConfiguration(BitronixTransactionManagerLookup.class)) // <2>
+        .with(CacheManagerBuilder.persistence(new File(getStoragePath(), "testXACacheWithThreeTiers"))) // <3>
+        .withCache("xaCache", CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class, // <4>
+                ResourcePoolsBuilder.newResourcePoolsBuilder() // <5>
                         .heap(10, EntryUnit.ENTRIES)
                         .offheap(10, MemoryUnit.MB)
                         .disk(20, MemoryUnit.MB, true)
                 )
                 .add(new XAStoreConfiguration("xaCache")) // <6>
-                .buildConfig(Long.class, String.class)
+                .build()
         )
         .build(true);
 
@@ -257,7 +218,7 @@ public class XAGettingStarted {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SampleLoaderWriter.class);
 
-    private final Map<K, V> data = new HashMap<K, V>();
+    private final Map<K, V> data = new HashMap<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public SampleLoaderWriter(Map<K, V> initialData) {

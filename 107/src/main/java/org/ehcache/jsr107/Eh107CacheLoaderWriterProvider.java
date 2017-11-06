@@ -18,16 +18,15 @@ package org.ehcache.jsr107;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import org.ehcache.spi.ServiceProvider;
 import org.ehcache.spi.loaderwriter.CacheLoaderWriter;
-import org.ehcache.spi.loaderwriter.DefaultCacheLoaderWriterProvider;
+import org.ehcache.impl.internal.spi.loaderwriter.DefaultCacheLoaderWriterProvider;
 
 /**
  * @author teck
  */
 class Eh107CacheLoaderWriterProvider extends DefaultCacheLoaderWriterProvider {
 
-  private final ConcurrentMap<String, CacheLoaderWriter<?, ?>> cacheLoaderWriters = new ConcurrentHashMap<String, CacheLoaderWriter<?, ?>>();
+  private final ConcurrentMap<String, CacheLoaderWriter<?, ?>> cacheLoaderWriters = new ConcurrentHashMap<>();
 
   public Eh107CacheLoaderWriterProvider() {
     super(null);

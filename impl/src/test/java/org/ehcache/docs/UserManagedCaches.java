@@ -18,18 +18,22 @@ package org.ehcache.docs;
 
 import org.ehcache.PersistentUserManagedCache;
 import org.ehcache.UserManagedCache;
-import org.ehcache.UserManagedCacheBuilder;
-import org.ehcache.config.ResourcePoolsBuilder;
-import org.ehcache.config.persistence.DefaultPersistenceConfiguration;
-import org.ehcache.config.persistence.UserManagedPersistenceContext;
+import org.ehcache.config.builders.CacheEventListenerConfigurationBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
+import org.ehcache.config.builders.UserManagedCacheBuilder;
 import org.ehcache.config.units.EntryUnit;
 import org.ehcache.config.units.MemoryUnit;
-import org.ehcache.internal.persistence.DefaultLocalPersistenceService;
-import org.ehcache.spi.service.LocalPersistenceService;
+import org.ehcache.core.spi.service.LocalPersistenceService;
+import org.ehcache.docs.plugs.ListenerObject;
+import org.ehcache.event.EventType;
+import org.ehcache.impl.persistence.DefaultLocalPersistenceService;
+import org.ehcache.impl.config.persistence.DefaultPersistenceConfiguration;
+import org.ehcache.impl.config.persistence.UserManagedPersistenceContext;
 import org.junit.Test;
 
 import java.io.File;
 import java.net.URISyntaxException;
+import java.util.concurrent.Executors;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
@@ -57,10 +61,9 @@ public class UserManagedCaches {
   public void userManagedDiskCache() throws Exception {
     // tag::persistentUserManagedCache[]
     LocalPersistenceService persistenceService = new DefaultLocalPersistenceService(new DefaultPersistenceConfiguration(new File(getStoragePath(), "myUserData"))); // <1>
-//    persistenceService.start(, null);
 
     PersistentUserManagedCache<Long, String> cache = UserManagedCacheBuilder.newUserManagedCacheBuilder(Long.class, String.class)
-        .with(new UserManagedPersistenceContext<Long, String>("cache-name", persistenceService)) // <2>
+        .with(new UserManagedPersistenceContext<>("cache-name", persistenceService)) // <2>
         .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder()
             .heap(10L, EntryUnit.ENTRIES)
             .disk(10L, MemoryUnit.MB, true)) // <3>
@@ -71,8 +74,31 @@ public class UserManagedCaches {
     assertThat(cache.get(42L), is("The Answer!"));
 
     cache.close(); // <4>
-    cache.toMaintenance().destroy(); // <5>
+    cache.destroy(); // <5>
+
+    persistenceService.stop(); // <6>
     // end::persistentUserManagedCache[]
+  }
+
+  @Test
+  public void userManagedListenerCache() throws Exception {
+    // tag::userManagedListenerCache[]
+
+    UserManagedCache<Long, String> cache = UserManagedCacheBuilder.newUserManagedCacheBuilder(Long.class, String.class)
+        .withEventExecutors(Executors.newSingleThreadExecutor(), Executors.newFixedThreadPool(5)) // <1>
+        .withEventListeners(CacheEventListenerConfigurationBuilder
+            .newEventListenerConfiguration(ListenerObject.class, EventType.CREATED, EventType.UPDATED)
+            .asynchronous()
+            .unordered()) // <2>
+        .withResourcePools(ResourcePoolsBuilder.newResourcePoolsBuilder()
+            .heap(3, EntryUnit.ENTRIES))
+        .build(true);
+
+    cache.put(1L, "Put it");
+    cache.put(1L, "Update it");
+
+    cache.close();
+    // end::userManagedListenerCache[]
   }
 
   private String getStoragePath() throws URISyntaxException {

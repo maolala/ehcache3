@@ -26,37 +26,38 @@ import bitronix.tm.resource.common.XAResourceHolder;
 import bitronix.tm.resource.common.XAResourceProducer;
 import bitronix.tm.resource.common.XAStatefulHolder;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import org.ehcache.internal.concurrent.ConcurrentHashMap;
+
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.naming.NamingException;
 import javax.naming.Reference;
 import javax.naming.StringRefAddr;
 import javax.transaction.xa.XAResource;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.util.Map;
 
 /**
  * @author Ludovic Orban
  */
-public class Ehcache3XAResourceProducer extends ResourceBean implements XAResourceProducer {
+class Ehcache3XAResourceProducer extends ResourceBean implements XAResourceProducer {
 
   private static final long serialVersionUID = -6421881731950504009L;
 
   @SuppressFBWarnings("SE_BAD_FIELD")
-  private final Map<XAResource, Ehcache3XAResourceHolder> xaResourceHolders = new ConcurrentHashMap<XAResource, Ehcache3XAResourceHolder>();
+  private final Map<XAResource, Ehcache3XAResourceHolder> xaResourceHolders = new ConcurrentHashMap<>();
   private volatile transient RecoveryXAResourceHolder recoveryXAResourceHolder;
 
-  public Ehcache3XAResourceProducer() {
+  Ehcache3XAResourceProducer() {
     setApplyTransactionTimeout(true);
   }
 
-  protected void addXAResource(XAResource xaResource) {
+  void addXAResource(XAResource xaResource) {
     Ehcache3XAResourceHolder xaResourceHolder = new Ehcache3XAResourceHolder(xaResource, this);
     xaResourceHolders.put(xaResource, xaResourceHolder);
   }
 
-  protected boolean removeXAResource(XAResource xaResource) {
+  boolean removeXAResource(XAResource xaResource) {
     return xaResourceHolders.remove(xaResource) != null;
   }
 
@@ -73,7 +74,7 @@ public class Ehcache3XAResourceProducer extends ResourceBean implements XAResour
     return new XAResourceHolderState(recoveryXAResourceHolder, this);
   }
 
-  protected boolean isEmpty() {
+  boolean isEmpty() {
     return xaResourceHolders.isEmpty();
   }
 

@@ -31,11 +31,12 @@ import static org.junit.Assert.fail;
 public class Eh107CacheTypeTest {
 
   @Test
+  @SuppressWarnings("unchecked")
   public void testCompileTimeTypeSafety() throws Exception {
     CachingProvider provider = Caching.getCachingProvider();
     javax.cache.CacheManager cacheManager =
         provider.getCacheManager(this.getClass().getResource("/ehcache-107-types.xml").toURI(), getClass().getClassLoader());
-    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<Long, String>();
+    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<>();
     javax.cache.Cache<Long, String> cache = cacheManager.createCache("cache1", cache1Conf);
 
     cache.put(1l, "one");
@@ -66,14 +67,15 @@ public class Eh107CacheTypeTest {
     CachingProvider provider = Caching.getCachingProvider();
     javax.cache.CacheManager cacheManager =
         provider.getCacheManager(this.getClass().getResource("/ehcache-107-types.xml").toURI(), getClass().getClassLoader());
-    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<Long, String>();
+    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<>();
     cache1Conf.setTypes(Long.class, String.class);
     javax.cache.Cache<Long, String> cache = cacheManager.createCache("cache1", cache1Conf);
 
-    Configuration cache1CompleteConf = cache.getConfiguration(Configuration.class);
+    @SuppressWarnings("unchecked")
+    Configuration<Long, String> cache1CompleteConf = cache.getConfiguration(Configuration.class);
 
-    assertThat((Class<Long>)cache1CompleteConf.getKeyType(), is(equalTo(Long.class)));
-    assertThat((Class<String>)cache1CompleteConf.getValueType(), is(equalTo(String.class)));
+    assertThat(cache1CompleteConf.getKeyType(), is(equalTo(Long.class)));
+    assertThat(cache1CompleteConf.getValueType(), is(equalTo(String.class)));
 
     try {
       cacheManager.getCache("cache1");
@@ -91,12 +93,13 @@ public class Eh107CacheTypeTest {
     CachingProvider provider = Caching.getCachingProvider();
     javax.cache.CacheManager cacheManager =
         provider.getCacheManager(this.getClass().getResource("/ehcache-107-types.xml").toURI(), getClass().getClassLoader());
-    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<Long, String>();
+    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<>();
     cache1Conf.setTypes(Long.class, String.class);
     javax.cache.Cache<Long, String> cache = cacheManager.createCache("defaultCache", cache1Conf);
-    Configuration cache1CompleteConf = cache.getConfiguration(Configuration.class);
-    assertThat((Class<Long>)cache1CompleteConf.getKeyType(), is(equalTo(Long.class)));
-    assertThat((Class<String>)cache1CompleteConf.getValueType(), is(equalTo(String.class)));
+    @SuppressWarnings("unchecked")
+    Configuration<Long, String> cache1CompleteConf = cache.getConfiguration(Configuration.class);
+    assertThat(cache1CompleteConf.getKeyType(), is(equalTo(Long.class)));
+    assertThat(cache1CompleteConf.getValueType(), is(equalTo(String.class)));
   }
 
   @Test
@@ -106,7 +109,7 @@ public class Eh107CacheTypeTest {
         provider.getCacheManager(this.getClass()
             .getResource("/ehcache-107-types.xml")
             .toURI(), getClass().getClassLoader());
-    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<Long, String>();
+    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<>();
     javax.cache.Cache<Long, String> cache = cacheManager.createCache("cache1", cache1Conf);
     cacheManager.unwrap(org.ehcache.CacheManager.class).removeCache(cache.getName());
     try {
@@ -123,7 +126,7 @@ public class Eh107CacheTypeTest {
         provider.getCacheManager(this.getClass()
             .getResource("/ehcache-107-types.xml")
             .toURI(), getClass().getClassLoader());
-    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<Long, String>();
+    MutableConfiguration<Long, String> cache1Conf = new MutableConfiguration<>();
     javax.cache.Cache<Long, String> cache = cacheManager.createCache("cache1", cache1Conf);
     cacheManager.unwrap(org.ehcache.CacheManager.class).removeCache(cache.getName());
     cacheManager.close();

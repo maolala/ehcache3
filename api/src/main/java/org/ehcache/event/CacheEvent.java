@@ -21,27 +21,25 @@ import org.ehcache.Cache;
 /**
  * An event resulting from a mutative {@link Cache} operation.
  *
- * @param <K> the type of the keys used to access data within the cache
- * @param <V> the type of the values held within the cache
- *
- * @author Alex Snaps
+ * @param <K> the key type of the source cache
+ * @param <V> the value type of the source cache
  */
 public interface CacheEvent<K, V> {
 
   /**
-   * The type of mutative event
+   * Gets the {@link EventType} of this event.
    *
-   * @return the @{link EventType}
+   * @return the {@code EventType}
    */
   EventType getType();
 
   /**
-   * The key of the mapping affected by the mutative event
+   * The key of the mapping affected by this event.
    *
-   * @return the mutated key
+   * @return the key of the mutated mapping
    */
   K getKey();
-  
+
   /**
    * The mapped value immediately after the mutative event occurred.
    * <p>
@@ -61,11 +59,12 @@ public interface CacheEvent<K, V> {
   V getOldValue();
 
   /**
-   * The cache originating this event
+   * The source cache for this event
    * <p>
-   * Don't ever call back into this cache to perform any further operations!
+   * Calling back into the cache to perform operations is not supported. It is only provided as a way to identify the
+   * event source.
    *
-   * @return the cache you should only use to identify the source, not to use it!
+   * @return the source cache
    */
   @Deprecated
   Cache<K, V> getSource();

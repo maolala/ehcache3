@@ -1,348 +1,191 @@
 ---
 ---
-ifndef::sourcedir[]
+= Ehcache 3.4 Documentation
+ifndef::sourcedir34[]
 include::common.adoc[]
-endif::sourcedir[]
-
-= Ehcache 3.0 Documentation
-
+endif::sourcedir34[]
+We feel that the Ehcache 3.x API is a great improvement over the Ehcache 2.x API that has been used by millions of developers. We hope you enjoy this new generation of Ehcache!
 
 ifdef::notBuildingForSite[]
 include::menu.adoc[]
 endif::notBuildingForSite[]
 
-== Getting started with the new API
+== Configuring Ehcache
+
+In order to start using Ehcache, you will need to configure your first `CacheManager` and `Cache`.
+This can be achieved through <<configuring-with-java,programmatic configuration>> or <<configuring-with-xml,XML>>.
 
 NOTE: If you are looking to use the JSR-107, aka `javax.cache` API, you should start by reading
-      link:107{outfilesuffix}[the Ehcache 3.x JSR-107 Provider page]
+      <<107.adoc#,the Ehcache 3.x JSR-107 Provider page>>.
 
-WARNING: *This is still a work in progress*. While it represents the API as it exists today, the final version will be represented in the Ehcache 3.0 OSS Beta.
+[[configuring-with-java]]
+=== Programmatic configuration
 
-=== Configuring it all in Java
+Java configuration is most easily achieved through the use of builders that offer a fluent API.
 
-==== Managed cache
+As with the previous versions of Ehcache, the canonical way of dealing with `Cache` is through a `CacheManager`.
 
 [source,java,indent=0]
 ----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=cachemanagerExample]
+include::{sourcedir34}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=cachemanagerExample]
 ----
 
-<1> Static method `org.ehcache.CacheManagerBuilder.newCacheManagerBuilder` that returns a new `org.ehcache.CacheManagerBuilder`
-    instance;
-<2> Use the builder to register a pre-configured `Cache` to be created when we `.build()` the actual `CacheManager`.
-    The first `String` argument is the alias used to interact with the `Cache` through the `CacheManager`; the second
-    argument is `org.ehcache.config.CacheConfiguration` to configure the `Cache`. We use the static
-    `.newCacheConfigurationBuilder()` method on `org.ehcache.config.CacheConfigurationBuilder` to create a default config;
-<3> Finally, invoking `.build(bool)` returns a fully instantiated, possibly initialized, `CacheManager` we can use;
-<4> Before you start to use the `CacheManager` it needs to be `init()`, which can be done for you by the builder by passing `true` to `build(bool)`;
-<5> We can retrieve the `preConfigured` aliased `Cache` we declared in step 2. For type-safety, we ask for both key and
-    value types to be passed in. If these differ from the ones we expect, the `CacheManager` throws a `ClassCastException`
-    early in the application's lifecycle. It also guards the `Cache` from being polluted by random types.
-<6> The `CacheManager` can also be used to create new `Cache` as needed. Just as in step 2, it requires passing in an
+<1> The static method `org.ehcache.config.builders.CacheManagerBuilder.newCacheManagerBuilder` returns a new `org.ehcache.config.builders.CacheManagerBuilder` instance.
+<2> Use the builder to define a `Cache` with alias "preConfigured". This cache will be created when `cacheManager.build()` is invoked on the actual `CacheManager` instance.
+The first `String` argument is the cache alias, which is used to retrieve the cache from the `CacheManager`.
+The second argument, `org.ehcache.config.CacheConfiguration`, is used to configure the `Cache`.
+We use the static `newCacheConfigurationBuilder()` method on `org.ehcache.config.builders.CacheConfigurationBuilder` to create a default configuration.
+<3> Finally, invoking `build()` returns a fully instantiated, **but uninitialized**, `CacheManager` we can use.
+<4> Before using the `CacheManager` it needs to be initialized, which can be done in 1 of 2 ways:
+Calling `CacheManager.init()` on the `CacheManager` instance, or calling the `CacheManagerBuilder.build(boolean init)` method with the boolean parameter set to true.
+<5> A cache is retrieved by passing its alias, key type and value type to the `CacheManager`.
+For instance, to obtain the cache declared in step 2 you need its `alias="preConfigured"`, `keyType=Long.class` and `valueType=String.class`.
+For type-safety, we ask for both key and value types to be passed in.
+If these differ from the ones we expect, the `CacheManager` throws a `ClassCastException` early in the application's lifecycle.
+This guards the `Cache` from being polluted by random types.
+<6> The `CacheManager` can be used to create new `Cache` instances as needed. Just as in step 2, it requires passing in an
     alias as well as a `CacheConfiguration`. The instantiated and fully initialized `Cache` added will be returned and/or
     accessed through the `CacheManager.getCache` API.
-<7> We can now use the newly added `Cache` to store and ...
-<8> ... retrieve data.
-<9> We can also `CacheManager.remove()` a given `Cache`. The `CacheManager` will not only remove it's reference to the
+<7> The newly added `Cache` can now be used to store entries, which are comprised of key value pairs.
+The put method's first parameter is the key and the second parameter is the value.
+Remember the key and value types must be the same types as those defined in the `CacheConfiguration`.
+Additionally the key must be unique and is only associated with one value.
+<8> A value is retrieved from a cache by calling the `cache.get(key)` method.
+It only takes one parameter which is the key, and returns the value associated with that key. If there is no value associated with that key then null is returned.
+<9> We can `CacheManager.removeCache(String)` a given `Cache`. The `CacheManager` will not only remove its reference to the
     `Cache`, but will also close it. The `Cache` releases all locally held transient resources (such as memory).
     References to this `Cache` become unusable.
 <10> In order to release all transient resources (memory, threads, ...) a `CacheManager` provides to `Cache` instances
      it manages, you have to invoke `CacheManager.close()`, which in turns closes all `Cache` instances known at the time.
 
-==== User managed cache
+Here is a shorter version featuring 3 important things:
 
 [source,java,indent=0]
 ----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/UserManagedCaches.java[tag=userManagedCacheExample]
+include::{sourcedir34}/integration-test/src/test/java/org/ehcache/docs/GettingStartedWithStaticImports.java[tag=java7Example]
+----
+<1> A `CacheManager` implements `Closeable` so can be closed automatically by a try-with-resources.
+A `CacheManager` must be closed cleanly. In a `finally` block, with a `try-with-resources` or (more frequent for normal applications) in some shutdown hook.
+<2> Builders having different names, you can use static imports for all of them.
+<3> The `CacheManager` is initialized using `build(true)`.
+
+[[configuring-with-xml]]
+=== XML configuration
+
+You can create an XML file to configure a `CacheManager`.
+
+[source,xml,indent=0]
+----
+include::{sourcedir34}/xml/src/test/resources/configs/docs/getting-started.xml[tags=gettingStarted]
 ----
 
-<1> A new feature of Ehcache 3.0 is the ability to create `UserManagedCache` instances, i.e. ones not managed by a `CacheManager`, again you can either have the builder `init()` it for you, passing true or
-<2> pass false and it is up to you to `UserManagedCache.init()` them, prior to using them.
-<3> You can use the cache exactly as a managed cache
-<4> In the same vein, a `UserManagedCache` requires you to `UserManagedCache.close()` it explicitly. If you would also use
-    managed caches simultaneously, the `CacheManager.close()` operation would not impact the user managed cache(s).
-
-NOTE: See link:usermanaged{outfilesuffix}[the user managed cache documentation] for more information on this feature.
-
-=== Tiering
-
-==== Off-heap
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=offheapCacheManager]
-----
-
-<1> If you wish to use off-heap, you'll have to define resource pool, giving the memory size you want to allocate.
-
-Do not forget to define in the java options the -XX:MaxDirectMemorySize option, according to the off-heap size you intend to use.
-
-==== Disk persistence
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=persistentCacheManager]
-----
-
-<1> If you wish to use disk storage (like for persistent `Cache` instances), you'll have to register a
-    `LocalPersistenceService` with your `CacheManager`, which you can do by providing the location where
-    data should be stored on disk to the `CacheManagerBuilder.persistence(String)` static method.
-<2> You define a resource pool for the disk.
-
-==== Three tiers
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=threeTiersCacheManager]
-----
-
-<1> If you wish to use disk storage (like for persistent `Cache` instances), you'll have to register a
-    `LocalPersistenceService` with your `CacheManager`, which you can do by providing the location where
-    data should be stored on disk to the `CacheManagerBuilder.persistence(String)` static method.
-<2> You define a resource pool for the heap.
-<3> You define a resource pool for the off-heap.
-<4> You define a resource pool for the disk.
-
-==== Update ResourcePools
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=updateResourcesAtRuntime]
-----
-
-<1> You will need to create a new `ResourcePools` object with resources of required size, using `ResourcePoolsBuilder`. This object can
-    then be passed to the said method so as to trigger the update.
-<2> To update capacity of `ResourcePools`, `updateResourcePools(ResourcePools)` method in `RuntimeConfiguration` can be of help.
-    `ResourcePools` object created earlier can then be passed to this method so as to trigger the update.
-
-NOTE: Presently, `updateResourcePools()` only supports updating tiers that use `EntryUnit.ENTRIES` as the unit of measure.
-
-=== Integration
-
-==== Cache Event Listeners
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=cacheEventListener]
-----
-
-<1> Create a `CacheEventListenerConfiguration` using the builder indicating the listener class and the events to receive
-<2> Optionally indicate the delivery mode - defaults are _asynchronous_ and _un-ordered_
-<3> Pass the configuration of the listener into the cache configuration
-<4> You will be notified on creation
-<5> And on update
-<6> But not on removal
-
-Created, updated, and removed events are triggered by user execution of mutative methods as outlined in the table below.
-Eviction and expiration events can be triggered by both internal processes and by user execution of methods targeting both related and unrelated keys within the cache.
-
-.Cache entry event firing behaviors for mutative methods
-[frame="topbot",cols="^1m,<4m,^1m,<4m",options="header"]
-|=================================================================================================
-| input   | operation                                | output  | event {key, old-value, new-value}
-| {}      | put(K, V)                                | {K, V}  | created {K, null, V}
-| {K, V1} | put(K, V2)                               | {K, V2} | updated {K, V1, V2}
-| {}      | put(K, V) [immediately expired]          | {}      | none
-| {K, V1} | put(K, V2) [immediately expired]         | {}      | none
-|{}       | putIfAbsent(K, V)                        | {K, V}  | created {K, null, V}
-|{}       | putIfAbsent(K, V) [immediately expired]  | {}      | none
-|{K, V1}  | replace(K, V2)                           | {K, V2} | updated {K, V1, V2}
-|{K, V1}  | replace(K, V2) [immediately expired]     | {}      | none
-|{K, V1}  | replace(K, V1, V2)                       | {K, V2} | updated {K, V1, V2}
-|{K, V1}  | replace(K, V1, V2) [immediately expired] | {}      | no events
-|{K, V}   | remove(K)                                | {}      | removed {K, V, null}
-|=================================================================================================
-
-==== Write-Through Cache
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=writeThroughCache]
-----
-
-<1> If you wish to use a cache in read-through/write-through caching pattern, you'll have to implement
-    `CacheLoaderWriter` and register `CacheLoaderWriterFactory` service by adding concrete type to the
-    Cache using `DefaultCacheLoaderWriterConfiguration`.
-
-==== Write-Behind Cache
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=writeBehindCache]
-----
-
-<1> A Cache can be used in write-behind pattern as well. You will have to implement `CacheLoaderWriter`
-    and register using `DefaultCacheLoaderWriterConfiguration`.
-<2> Additionally, register a `WriteBehindDecoratorLoaderWriterProvider` service to Cache by adding
-    `WriteBehindConfiguration`.
-<3> Configure maximum size of the writebehind queue.
-<4> Define the concurrency level of writebehind queue, at a time these many writer threads will update
-    the  underlying resource asynchronously.
-<5> Enable write-behind queue to batch the updates to underlying resource.
-<6> Enable the write coalescing behavior, which ensures that only latest update on a key hits the
-    underlying resource.
-<7> You can configure write-behind queue to retry failed updates for `retryAttempts` times with
-    `retryAttemptDelaySeconds` delay.
-<8> Control maximum number of updates allowed per second.
-<9> Configure maximum and minimum number of seconds to wait before writing to the underlying resource.
-
-=== Serializers
-
-Serialization is primarily used in Ehcache to store the data in the non-heap tiers.
-So whenever the user configures a multi-tiered cache, serialization and deserialization can happen when the data is moved to and from the tiers.
-Ehcache provides default serializers that can serialize any `Serializable` type.
-So if you are using standard `Serializable` types as your keys and values, no extra serializers need to be configured as the built-in serializer will handle those cases.
-But if you use your own custom types in Ehcache that are not serializable, the stock serializer will not be able to perform the serialization/deserialization on its own.
-
-==== Custom serializers
-
-You can register your own custom serializers to the cache/cache manager.
-So if you register a serializer for a given type of objects, it would be used to perform all the serialization/deserialization for that type.
-
-You can configure serializers on the cache manager, to be applied to all caches:
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=defaultSerializers]
-----
-
-<1> Configure a global set of serializers. Each serializer is mapped to a type and the cache's declared key and value
-    types are used to select the best serializer from the list. Each cache will pick a serializer for both key and value
-    during initialization. If none is found, an error will be thrown. The serializer is chosen according to two rules:
-    either there is one configured for the exact declared type, or the first type-compatible one from the list is chosen.
-    By default, there is a serializer already configured for type `java.io.Serializable`.
-<2> Don't forget to set the serializers' config on the `CacheManagerBuilder`.
-
-Or you can configure specific serializers on the cache itself:
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=cacheSerializers]
-----
-
-<1> Configure the key's serializer.
-<2> Configure the value's serializer.
-
-Serializer instances are created per cache for keys and values separately.
-That is, even if you configure the same serializer type for multiple caches, different instances are created for each cache.
-The same applies to the serializers configured at the cache manager level as well.
-Similarly, even within a cache, if you configure the same serializer type for both key and value, different instances are created. 
-
-===== Implementation of a `Serializer`
-
-When implementing a `org.ehcache.spi.serialization.Serializer`, you obviously need to respect the interface contract.
-
-In addition, if you are using the `DefaultSerializationProvider` service provided by Ehcache; which would be the case
-for most of the users, unless they are using their own implementation of `SerializationProvider` service; there are a
-few implicit contracts:
-
-* A serializer implementation to be used with transient caches must have a public constructor taking a `ClassLoader` as parameter.
-* A serializer implementation to be used with persistent caches must have a public two-argument constructor taking a `ClassLoader` and a `FileBasedPersistenceContext` as parameters.
- 
-You are free to have as many extra constructors as you want. But these are the only constructors that will be used by
-Ehcache to instantiate these serializers. For a transient cache the single-argument constructor will be used and for a
-persistent cache the two-argument constructor will be used. Even though the user is enforced to have either or both the
-constructors in his serializer implementation, the usage of these arguments is up to the user. The user can decide to
-completely ignore these parameters. But the presence of these constructors is a strict requirement. Now, even though the
-usage of the constructor arguments is not enforced, it is highly recommended to use the `FileBasedPersistenceContext` to
-persist the state of the serializers, if there is any. 
-
-==== Store-By-Value Caches with Copiers
-
-JSR-107 mandates that the caches should support a store-by-value mechanism that makes a copy of the keys and values
-before storing them in the cache. Ehcache supports store-by-reference by default on heap and the user needs to configure the
-cache explicitly to use store-by-value.
-
-The user can specify custom copy logic for keys and values to be used for copying.
-The user can create a copier by implementing the `Copier<T>` interface directly if he has different needs for reads and writes.
-Another option is to implement the helper class `ReadWriteCopier<T>` that has an abstract `copy(T obj)` method used by the `Copier<T>` methods.
-If no copiers are provided, the cache will be a store-by-reference cache.
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=cacheCopiers]
-----
-
-<1> Configure the copier to be used for keys. *DescriptionCopier* in this case  as the keys are *Description* objects.
-<2> Configure the copier to be used for values. *PersonCopier* in this case as the values are *Person* objects.
-
-Now, if the user does not want to create his own custom copiers and still wants to have a store-by-value cache, ehcache
-provides a `SerializingCopier` that the user can directly use. `SerializingCopier` internally uses serialization to
-perform the copying. For serialization the serializers configured for the keys/values are used. You can configure the
-cache as follows to use serializing copier:
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=cacheSerializingCopiers]
-----
-
-<1> Provide the `SerializingCopier` just like any other custom copier in the copier configuration and that is all you
-    have to do. It is that simple.
-
-If you look at the cache configuration in the above example, there are no copiers configured for the keys, and that is
-fine in Ehcache. If a copier is not configured, we fall back to store-by-reference. So with the above configuration, you
-get a cache that stores keys _by-reference_ and values _by-value_.
-
-You can also have default copiers configured at the cache manager level so that you don't have to configure the same
-copiers again and again for multiple caches managed by the same cache manager. This is how you can do that:
-
-[source,java,indent=0]
-----
-include::{sourcedir}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=defaultCopiers]
-----
-
-<1> Create a `DefaultCopyProviderConfiguration` and add all the required default copiers.
-<2> Use the same configuration in the `CacheManagerBuilder`.
-<3> The `DescriptionCopier` and `PersonCopier` configured at the cache manager level will be used for this cache.
-<4> The `PersonCopier` configured at the cache manager level will be used for this cache.
-
-=== It wouldn't be Java without _some_ XML
-
-You can create a XML file to configure a `CacheManager`:
-
-[source,xml]
-----
-include::{sourcedir}/xml/src/test/resources/configs/getting-started.xml[tags=gettingStarted]
-----
-
-<1> Declares a `Cache` aliased to `foo`
-<2> The keys of `foo` are declared as type `String`; since the value type is not specified, the values will be of type `Object`.
+<1> Declares a `Cache` aliased to `foo`.
+<2> The keys and values of `foo` are declared as type `String`; if not specified, the default is `java.lang.Object`.
 <3> `foo` is declared to hold up to 2,000 entries on heap...
 <4> ...as well as up to 500 MB of off-heap memory before it starts evicting
-<5> `<cache-template>` elements let you create an abstract configuration that further `<cache>` configuration can then _extend_
+<5> `<cache-template>` elements let you create an abstract configuration that further `<cache>` configurations can then "extend"
 <6> `bar` is such a `Cache`.   `bar` uses the `<cache-template>` named `myDefaults` and overrides its `key-type` to a wider type.
-<7> `simpleCache` is another such a `Cache`.  It uses `myDefaults` configuration for its sole `CacheConfiguration`.
+<7> `simpleCache` is another such `Cache`.  It uses `myDefaults` configuration for its sole `CacheConfiguration`.
 
-Refer to the link:xml{outfilesuffix}[XML documentation] for more details on the XML format.
+Refer to the <<xml.adoc#,XML documentation>> for more details on the XML format.
 
 In order to parse an XML configuration, you can use the `XmlConfiguration` type:
 
 [source,java]
 ----
-final URL myUrl = this.getClass().getResource("/my-config.xml"); // <1>
+URL myUrl = getClass().getResource("/my-config.xml"); // <1>
 Configuration xmlConfig = new XmlConfiguration(myUrl); // <2>
 CacheManager myCacheManager = CacheManagerBuilder.newCacheManager(xmlConfig); // <3>
 ----
 
-<1> Obtain a `URL` to your XML file's location
-<2> Instantiate an `XmlConfiguration` passing the XML file's URL to it
-<3> Using the static `org.ehcache.CacheManagerBuilder.newCacheManager(org.ehcache.config.Configuration)` lets you
+<1> Obtain a `URL` to your XML file location
+<2> Instantiate an `XmlConfiguration` passing the XML file URL to it
+<3> Using the static `org.ehcache.config.builders.CacheManagerBuilder.newCacheManager(org.ehcache.config.Configuration)` lets you
     create your `CacheManager` instance using the `Configuration` from the `XmlConfiguration`
 
-== Current release
+=== Creating a cache manager with clustering support
 
-We released the Milestone 3 on September 18th, 2015. In addition to the JSR-107 compatibility,
-it introduces up to 3 level tiering, offering offheap as well as a new disk persistence option; write-behind, XA transactional
-caches, makes custom serialization possible, ...
+To enable Clustering with Terracotta, firstly you will have to <<clustered-cache.adoc#starting-server, start the Terracotta server>> configured with clustered storage.
+In addition, for creating the cache manager with clustering support, you will need to provide the clustering service configuration:
 
-The https://github.com/ehcache/ehcache3/releases/tag/v3.0.0.m3[release notes] contain the links to the documentation
-to help you get started
+[source,java,indent=0]
+----
+include::{sourcedir34}/clustered/client/src/test/java/org/ehcache/clustered/client/docs/GettingStarted.java[tag=clusteredCacheManagerExample]
+----
 
-== Current development & next release
+<1> Returns the `org.ehcache.config.builders.CacheManagerBuilder` instance;
+<2> Use the `ClusteringServiceConfigurationBuilder`{empty}'s static method `.cluster(URI)` for connecting the cache manager to the clustering storage at the
+    URI specified that returns the clustering service configuration builder instance.
+    The sample URI provided in the example points to the clustered storage with clustered storage identifier *my-application* on the Terracotta server (assuming the server is running on localhost and port *9410*); the query-param `auto-create`
+    creates the clustered storage in the server if it doesn't already exist.
+<3> Returns a fully initialized cache manager that can be used to create clustered caches.
+<4> Auto-create the clustered storage if it doesn't already exist.
+<5> Close the cache manager.
 
-We are now working on the next milestone, aka https://github.com/ehcache/ehcache3/milestones/Milestone%204[Milestone 4] :
-Automatic Resource Control will be the big item in this upcoming release.
+NOTE: See <<clustered-cache.adoc#,the clustered cache documentation>> for more information on this feature.
 
-See the https://github.com/ehcache/ehcache3/milestones[Milestones on GitHub] for more details on the current status.
+=== Storage Tiers
 
-For developer information, you might want to go check the https://github.com/ehcache/ehcache3/wiki[Ehcache 3.0 project wiki on GitHub].
+Ehcache 3, as in previous versions, offers a tiering model to allow storing increasing amounts of data on slower tiers
+(which are generally more abundant).
+
+The idea is that resources related to faster storage are more rare, but are located where the 'hottest' data is preferred to be.
+Thus less-hot (less frequently used) data is moved to the more abundant but slower tiers. Hotter data is moved onto
+the faster tiers.
+
+==== Three tiers
+
+A classical example would be using 3 tiers with a persistent disk storage.
+
+[source,java,indent=0]
+----
+include::{sourcedir34}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=threeTiersCacheManager]
+----
+
+<1> If you wish to use disk storage (like for persistent `Cache` instances), you'll have to provide a
+    location where data should be stored on disk to the `CacheManagerBuilder.persistence()` static method.
+<2> You define a resource pool for the heap. This will be your faster but smaller pool.
+<3> You define a resource pool for the off-heap. Still pretty fast and a bit bigger.
+<4> You define a persistent resource pool for the disk. It is persistent because said it should be (last parameter is `true`).
+<5> All values stored in the cache will be available after a JVM restart (assuming the `CacheManager` has been closed cleanly by calling `close()`).
+
+For details, read the <<tiering.adoc#,tiering documentation>>.
+
+=== Data freshness
+
+In Ehcache, data freshness is controlled through `Expiry`.
+The following illustrates how to configure a _time-to-live_ expiry.
+
+[source,java,indent=0]
+----
+include::{sourcedir34}/impl/src/test/java/org/ehcache/docs/GettingStarted.java[tag=expiry]
+----
+
+<1> Expiry is configured at the cache level, so start by defining a cache configuration,
+<2> then add to it an `Expiry`, here using the predefined _time-to-live_ one, configured with the required `Duration`.
+
+See the section on <<expiry.adoc#,expiry>> for more information about the options available.
+
+== Advanced topics
+
+A number of advanced topics that were discussed here have been moved out, see below.
+
+=== User managed cache
+
+See <<usermanaged.adoc#,the user managed cache documentation>> for more information on this feature.
+
+=== Byte-sized heap
+
+See the <<tiering.adoc#byte-sized-heap,relevant section>> in the tiering documentation for more information on this feature.
+
+=== Update ResourcePools
+
+See the <<tiering.adoc#update-resourcepools,relevant section>> in the tiering documentation for more information on this feature.
+
+=== Off-heap
+
+See <<tiering.adoc#off-heap,the tiering documentation>> for more information on this feature.
+
+=== Disk persistence
+
+See <<tiering.adoc#disk,the tiering documentation>> for more information on this feature.

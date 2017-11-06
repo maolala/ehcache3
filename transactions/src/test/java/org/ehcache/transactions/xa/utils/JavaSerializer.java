@@ -15,8 +15,8 @@
  */
 package org.ehcache.transactions.xa.utils;
 
-import org.ehcache.exceptions.SerializerException;
-import org.ehcache.internal.util.ByteBufferInputStream;
+import org.ehcache.spi.serialization.SerializerException;
+import org.ehcache.impl.internal.util.ByteBufferInputStream;
 import org.ehcache.spi.serialization.Serializer;
 
 import java.io.ByteArrayOutputStream;
@@ -31,7 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 
+ *
  * @author cdennis
  */
 public class JavaSerializer<T> implements Serializer<T> {
@@ -65,11 +65,8 @@ public class JavaSerializer<T> implements Serializer<T> {
   public T read(ByteBuffer entry) throws SerializerException, ClassNotFoundException {
     ByteBufferInputStream bin = new ByteBufferInputStream(entry);
     try {
-      OIS ois = new OIS(bin, classLoader);
-      try {
+      try (OIS ois = new OIS(bin, classLoader)) {
         return (T) ois.readObject();
-      } finally {
-        ois.close();
       }
     } catch (IOException e) {
       throw new SerializerException(e);
@@ -85,11 +82,6 @@ public class JavaSerializer<T> implements Serializer<T> {
   @Override
   public boolean equals(T object, ByteBuffer binary) throws SerializerException, ClassNotFoundException {
     return object.equals(read(binary));
-  }
-
-  @Override
-  public void close() {
-    //no-op
   }
 
   private static class OIS extends ObjectInputStream {
@@ -124,7 +116,7 @@ public class JavaSerializer<T> implements Serializer<T> {
       return Proxy.getProxyClass(classLoader, interfaceClasses);
     }
 
-    private static final Map<String, Class<?>> primitiveClasses = new HashMap<String, Class<?>>();
+    private static final Map<String, Class<?>> primitiveClasses = new HashMap<>();
     static {
       primitiveClasses.put("boolean", boolean.class);
       primitiveClasses.put("byte", byte.class);
@@ -137,5 +129,5 @@ public class JavaSerializer<T> implements Serializer<T> {
       primitiveClasses.put("void", void.class);
     }
   }
-  
+
 }

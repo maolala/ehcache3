@@ -16,84 +16,85 @@
 
 package org.ehcache.spi.loaderwriter;
 
+import java.util.concurrent.TimeUnit;
 import org.ehcache.spi.service.ServiceConfiguration;
 
 /**
- * WriteBehindConfiguration
+ * {@link ServiceConfiguration} for the {@link WriteBehindProvider}.
+ * <p>
+ * The {@code WriteBehindProvider} provides write-behind services to a
+ * {@link org.ehcache.Cache Cache}.
  */
-public interface WriteBehindConfiguration extends ServiceConfiguration<WriteBehindDecoratorLoaderWriterProvider> {
-  /**
-   * The minimum number of seconds to wait before writing behind.
-   *
-   * Lower than or equal to {@see getMaxWriteDelay}.
-   *
-   * @return Retrieves the minimum number of seconds to wait before writing behind
-   */
-  int getMinWriteDelay();
+public interface WriteBehindConfiguration extends ServiceConfiguration<WriteBehindProvider> {
 
   /**
-   * The maximum number of seconds to wait before writing behind.
+   * The concurrency of the write behind engines queues.
    *
-   * Greater than or equal to {@see getMinWriteDelay}
-   *
-   * @return Retrieves the maximum number of seconds to wait before writing behind
+   * @return the write behind concurrency
    */
-  int getMaxWriteDelay();
+  int getConcurrency();
 
   /**
-   * The maximum number of write operations to allow per second.
-   *
+   * The maximum number of operations allowed on each write behind queue.
+   * <p>
    * Only positive values are legal.
    *
-   * @return Retrieves the maximum number of write operations to allow per second.
+   * @return the maximum queue size
    */
-  int getRateLimitPerSecond();
+  int getMaxQueueSize();
 
   /**
-   * Whether write operations can be coalesced.
+   * Returns the batching configuration or {@code null} if batching is not enabled.
    *
-   * @return Retrieves the write coalescing behavior is enabled or not
+   * @return the batching configuration
    */
-  boolean isWriteCoalescing();
+  BatchingConfiguration getBatchingConfiguration();
 
   /**
-   * The recommended size of a batch of operations.
+   * Returns the alias of the thread resource pool to use for write behind task execution.
    *
-   * Only positive values are legal. A value of 1 indicates that no batching should happen.
-   *
-   * Real batch size will be influenced by arrival frequency of operations and max write delay.
-   *
-   * @return Retrieves the size of the batch operation.
+   * @return the thread pool alias
    */
-  int getWriteBatchSize();
+  String getThreadPoolAlias();
 
   /**
-   * The number of times the write of a mapping will be retried in the case of failure.
-   *
-   * @return Retrieves the number of times the write of element is retried.
+   * The batching specific part of {@link WriteBehindConfiguration}.
    */
-  int getRetryAttempts();
+  interface BatchingConfiguration {
 
-  /**
-   * A number of seconds to wait before retrying an failed operation.
-   *
-   * @return Retrieves the number of seconds to wait before retrying an failed operation.
-   */
-  int getRetryAttemptDelaySeconds();
+    /**
+     * The recommended size of a batch of operations.
+     * <p>
+     * Only positive values are legal. A value of 1 indicates that no batching
+     * should happen. Real batch size will be influenced by the write rate and
+     * the max write delay.
+     *
+     * @return the batch size
+     */
+    int getBatchSize();
 
-  /**
-   * A number of bucket/thread pairs configured for this cache's write behind.
-   *
-   * @return Retrieves the amount of bucket/thread pairs configured for this cache's write behind
-   */
-  int getWriteBehindConcurrency();
+    /**
+     * The maximum time to wait before writing behind.
+     *
+     * @return the maximum write delay
+     */
+    long getMaxDelay();
 
-  /**
-   * The maximum number of operations allowed on the write behind queue.
-   *
-   * Only positive values are legal.
-   *
-   * @return Retrieves the maximum amount of operations allowed on the write behind queue
-   */
-  int getWriteBehindMaxQueueSize();
+    /**
+     * The time unit for the maximum delay.
+     *
+     * @return Retrieves the unit for the maximum delay
+     */
+    TimeUnit getMaxDelayUnit();
+
+    /**
+     * Whether write operations can be coalesced.
+     * <p>
+     * Write coalescing ensure that operations within a batch for the same key
+     * will be coalesced in to a single write operation.
+     *
+     * @return {@code true} if write coalescing enabled
+     */
+    boolean isCoalescing();
+  }
 }

@@ -15,19 +15,21 @@
  */
 package com.pany.ehcache.serializer;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import org.ehcache.exceptions.SerializerException;
-import org.ehcache.internal.serialization.CompactJavaSerializer;
-
+import org.ehcache.impl.serialization.TransientStateRepository;
+import org.ehcache.spi.serialization.SerializerException;
+import org.ehcache.impl.serialization.CompactJavaSerializer;
 import org.ehcache.spi.serialization.Serializer;
 
+import java.nio.ByteBuffer;
+
 public class TestSerializer<T> implements Serializer<T> {
-  
+
   private final Serializer<T> serializer;
 
   public TestSerializer(ClassLoader classLoader) {
-    serializer = new CompactJavaSerializer<T>(classLoader);
+    CompactJavaSerializer<T> compactJavaSerializer = new CompactJavaSerializer<>(classLoader);
+    compactJavaSerializer.init(new TransientStateRepository());
+    serializer = compactJavaSerializer;
   }
 
   @Override
@@ -43,10 +45,5 @@ public class TestSerializer<T> implements Serializer<T> {
   @Override
   public boolean equals(T object, ByteBuffer binary) throws SerializerException, ClassNotFoundException {
     return serializer.equals(object, binary);
-  }
-
-  @Override
-  public void close() throws IOException {
-    serializer.close();
   }
 }

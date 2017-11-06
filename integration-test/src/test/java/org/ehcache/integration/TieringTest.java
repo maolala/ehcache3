@@ -18,12 +18,12 @@ package org.ehcache.integration;
 
 import org.ehcache.config.units.EntryUnit;
 import org.ehcache.config.units.MemoryUnit;
-import org.ehcache.exceptions.StateTransitionException;
+import org.ehcache.StateTransitionException;
 import org.junit.Test;
 
-import static org.ehcache.CacheManagerBuilder.newCacheManagerBuilder;
-import static org.ehcache.config.CacheConfigurationBuilder.newCacheConfigurationBuilder;
-import static org.ehcache.config.ResourcePoolsBuilder.newResourcePoolsBuilder;
+import static org.ehcache.config.builders.CacheConfigurationBuilder.newCacheConfigurationBuilder;
+import static org.ehcache.config.builders.ResourcePoolsBuilder.newResourcePoolsBuilder;
+import static org.ehcache.config.builders.CacheManagerBuilder.newCacheManagerBuilder;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
@@ -36,12 +36,12 @@ public class TieringTest {
   @Test
   public void testDiskTierWithoutPersistenceServiceFailsWithClearException() {
     try {
-      newCacheManagerBuilder().withCache("failing", newCacheConfigurationBuilder().withResourcePools(newResourcePoolsBuilder()
+      newCacheManagerBuilder().withCache("failing", newCacheConfigurationBuilder(Long.class, String.class, newResourcePoolsBuilder()
           .heap(5, EntryUnit.ENTRIES)
-          .disk(5, MemoryUnit.MB)).buildConfig(Long.class, String.class)).build(true);
+          .disk(5, MemoryUnit.MB)).build()).build(true);
       fail("Should not initialize");
     } catch (StateTransitionException e) {
-      assertThat(e.getCause().getCause().getMessage(), containsString("No LocalPersistenceService could be found"));
+      assertThat(e.getCause().getCause().getMessage(), containsString("No service found for persistable resource: disk"));
     }
   }
 }

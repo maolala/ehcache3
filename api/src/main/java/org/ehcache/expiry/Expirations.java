@@ -15,61 +15,74 @@
  */
 package org.ehcache.expiry;
 
+import org.ehcache.ValueSupplier;
+
 /**
  * Utility class for getting predefined {@link Expiry} instances.
  */
 public final class Expirations {
 
   /**
-   * Get an {@link Expiry} instance for a non expiring (ie. "eternal") cache
+   * Get an {@link Expiry} instance for a non expiring (ie. "eternal") cache.
    *
-   * @return no expiry instance
+   * @return the no expiry instance
    */
   public static Expiry<Object, Object> noExpiration() {
     return NoExpiry.INSTANCE;
   }
 
   /**
-   * Get a time-to-live (TTL) {@link Expiry} instance for the given duration
+   * Get a time-to-live (TTL) {@link Expiry} instance for the given {@link Duration}.
    *
-   * @param timeToLive the duration of TTL
-   * @param <K> the type of the keys used to access data within the cache
-   * @param <V> the type of the values held within the cache
+   * @param timeToLive the TTL duration
    * @return a TTL expiry
-   *
    */
-  public static <K, V> Expiry<K, V> timeToLiveExpiration(Duration timeToLive) {
+  public static Expiry<Object, Object> timeToLiveExpiration(Duration timeToLive) {
     if (timeToLive == null) {
-      throw new NullPointerException("null duration");
+      throw new NullPointerException("Duration cannot be null");
     }
-    return new TimeToLiveExpiry<K, V>(timeToLive);
+    return new TimeToLiveExpiry(timeToLive);
   }
 
   /**
-   * Get a time-to-idle (TTI) {@link Expiry} instance for the given duration
+   * Get a time-to-idle (TTI) {@link Expiry} instance for the given {@link Duration}.
    *
-   * @param timeToIdle the duration of TTI
-   * @param <K> the type of the keys used to access data within the cache
-   * @param <V> the type of the values held within the cache
+   * @param timeToIdle the TTI duration
    * @return a TTI expiry
    */
-  public static <K, V> Expiry<K, V> timeToIdleExpiration(Duration timeToIdle) {
+  public static Expiry<Object, Object> timeToIdleExpiration(Duration timeToIdle) {
     if (timeToIdle == null) {
-      throw new NullPointerException("null duration");
+      throw new NullPointerException("Duration cannot be null");
     }
-    return new TimeToIdleExpiry<K, V>(timeToIdle);
+    return new TimeToIdleExpiry(timeToIdle);
+  }
+
+  /**
+   * Fluent API for creating an Expiry instance where you can specify constant values for creation, access and update time.
+   * Unspecified values will be set to {@code Duration.INFINITE} for create and {@code null} for access and update, matching
+   * the {@link #noExpiration() no expiration} expiry.
+   *
+   * @param <K> the key type for the cache
+   * @param <V> the value type for the cache
+   * @return an {@link Expiry} builder
+   */
+  public static <K, V> ExpiryBuilder<K, V> builder() {
+    return new ExpiryBuilder<>();
   }
 
   private Expirations() {
     //
   }
 
-  private static abstract class BaseExpiry<K, V> implements Expiry<K, V> {
+  /**
+   * Simple implementation of the {@link Expiry} interface allowing to set constants to each expiry types.
+   */
+  private static class BaseExpiry<K, V> implements Expiry<K, V> {
 
     private final Duration create;
     private final Duration access;
     private final Duration update;
-    
+
     BaseExpiry(Duration create, Duration access, Duration update) {
       this.create = create;
       this.access = access;
@@ -80,10 +93,15 @@ public final class Expirations {
     public Duration getExpiryForCreation(K key, V value) {
       return create;
     }
-    
+
     @Override
-    public Duration getExpiryForAccess(K key, V value) {
+    public Duration getExpiryForAccess(K key, ValueSupplier<? extends V> value) {
       return access;
+    }
+
+    @Override
+    public Duration getExpiryForUpdate(K key, ValueSupplier<? extends V> oldValue, V newValue) {
+      return update;
     }
 
     @Override
@@ -91,7 +109,7 @@ public final class Expirations {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
 
-      final BaseExpiry<?, ?> that = (BaseExpiry<?, ?>)o;
+      final BaseExpiry that = (BaseExpiry)o;
 
       if (access != null ? !access.equals(that.access) : that.access != null) return false;
       if (create != null ? !create.equals(that.create) : that.create != null) return false;
@@ -111,36 +129,87 @@ public final class Expirations {
     @Override
     public String toString() {
       return this.getClass().getSimpleName() + "{" +
-          "create=" + create +
-          ", access=" + access +
-          ", update=" + update +
-          '}';
+             "create=" + create +
+             ", access=" + access +
+             ", update=" + update +
+             '}';
     }
-    
-    @Override
-    public Duration getExpiryForUpdate(K key, V oldValue, V newValue) {
-      return update;
-    }   
   }
 
-  private static class TimeToLiveExpiry<K, V> extends BaseExpiry<K, V> {
+  private static class TimeToLiveExpiry extends BaseExpiry<Object, Object> {
     TimeToLiveExpiry(Duration ttl) {
       super(ttl, null, ttl);
     }
   }
 
-  private static class TimeToIdleExpiry<K, V> extends BaseExpiry<K, V> {
+  private static class TimeToIdleExpiry extends BaseExpiry<Object, Object> {
     TimeToIdleExpiry(Duration tti) {
       super(tti, tti, tti);
     }
   }
 
-  private static class NoExpiry<K, V> extends BaseExpiry<K, V> {
+  private static class NoExpiry extends BaseExpiry<Object, Object> {
 
-    private static final Expiry<Object, Object> INSTANCE = new NoExpiry<Object, Object>();
+    private static final Expiry<Object, Object> INSTANCE = new NoExpiry();
 
     private NoExpiry() {
-      super(Duration.FOREVER, null, null);
+      super(Duration.INFINITE, null, null);
+    }
+  }
+
+  /**
+   * Builder to create a simple {@link Expiry}.
+   *
+   * @param <K> Key type of the cache entries
+   * @param <V> Value type of the cache entries
+   */
+  public static final class ExpiryBuilder<K, V> {
+
+    private Duration create = Duration.INFINITE;
+    private Duration access = null;
+    private Duration update = null;
+
+    private ExpiryBuilder() {}
+
+    /**
+     * Set TTL since creation
+     *
+     * @param create TTL since creation
+     * @return this builder
+     */
+    public ExpiryBuilder<K, V> setCreate(Duration create) {
+      this.create = create;
+      return this;
+    }
+
+    /**
+     * Set TTL since last access
+     *
+     * @param access TTL since last access
+     * @return this builder
+     */
+    public ExpiryBuilder<K, V> setAccess(Duration access) {
+      this.access = access;
+      return this;
+    }
+
+    /**
+     * Set TTL since last update
+     *
+     * @param update TTL since last update
+     * @return this builder
+     */
+    public ExpiryBuilder<K, V> setUpdate(Duration update) {
+      this.update = update;
+      return this;
+    }
+
+    /**
+     *
+     * @return an {@link Expiry}
+     */
+    public Expiry<K, V> build() {
+      return new BaseExpiry<>(create, access, update);
     }
   }
 }

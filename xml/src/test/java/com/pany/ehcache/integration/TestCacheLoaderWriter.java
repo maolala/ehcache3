@@ -29,7 +29,7 @@ import org.ehcache.spi.loaderwriter.CacheLoaderWriter;
 public class TestCacheLoaderWriter implements CacheLoaderWriter<Number, String> {
 
   public static Number lastWrittenKey;
-  
+
   public static CountDownLatch latch;
 
   @Override
@@ -39,7 +39,7 @@ public class TestCacheLoaderWriter implements CacheLoaderWriter<Number, String> 
 
   @Override
   public Map<Number, String> loadAll(final Iterable<? extends Number> keys) throws Exception {
-    final Map<Number, String> loaded = new HashMap<Number, String>();
+    final Map<Number, String> loaded = new HashMap<>();
     for (Number key : keys) {
       loaded.put(key, load(key));
     }

@@ -15,20 +15,23 @@
  */
 package org.ehcache.internal.store;
 
-import org.ehcache.config.Eviction;
-import org.ehcache.exceptions.CacheAccessException;
-import org.ehcache.function.Function;
-import org.ehcache.spi.cache.Store;
+import org.ehcache.core.spi.store.StoreAccessException;
+import org.ehcache.core.spi.store.Store;
+import org.ehcache.expiry.Duration;
+import org.ehcache.expiry.Expirations;
+import org.ehcache.internal.TestTimeSource;
 import org.ehcache.spi.test.After;
 import org.ehcache.spi.test.LegalSPITesterException;
 import org.ehcache.spi.test.SPITest;
 
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.fail;
 
 public class StoreComputeIfAbsentTest<K, V> extends SPIStoreTester<K, V> {
 
@@ -42,19 +45,20 @@ public class StoreComputeIfAbsentTest<K, V> extends SPIStoreTester<K, V> {
   @After
   public void tearDown() {
     if (kvStore != null) {
-//      kvStore.close();
+      factory.close(kvStore);
       kvStore = null;
     }
     if (kvStore2 != null) {
-//      kvStore2.close();
-      kvStore2 = null;
+      @SuppressWarnings("unchecked")
+      Store<K, V> kvStore2 = (Store<K, V>) this.kvStore2;
+      factory.close(kvStore2);
+      this.kvStore2 = null;
     }
   }
 
-  @SuppressWarnings({ "rawtypes", "unchecked" })
   @SPITest
   public void testWrongReturnValueType() throws Exception {
-    kvStore = factory.newStoreWithEvictionVeto(Eviction.<K, V>all());
+    kvStore = factory.newStore();
 
     if (factory.getValueType() == Object.class) {
       System.err.println("Warning, store uses Object as value type, cannot verify in this configuration");
@@ -62,7 +66,7 @@ public class StoreComputeIfAbsentTest<K, V> extends SPIStoreTester<K, V> {
     }
 
     K key = factory.createKey(1L);
-    
+
     final Object badValue;
     if (factory.getValueType() == String.class) {
       badValue = this;
@@ -71,24 +75,23 @@ public class StoreComputeIfAbsentTest<K, V> extends SPIStoreTester<K, V> {
     }
 
     try {
-      kvStore.computeIfAbsent(key, new Function() {
-        @Override
-        public Object apply(Object key) {
-          return badValue; // returning wrong value type from function
-        }
+      kvStore.computeIfAbsent(key, keyParam -> {
+        @SuppressWarnings("unchecked")
+        V value = (V) badValue; // returning wrong value type from function
+        return value;
       });
       throw new AssertionError();
     } catch (ClassCastException e) {
       // expected
-    } catch (CacheAccessException e) {
+    } catch (StoreAccessException e) {
       throw new LegalSPITesterException("Warning, an exception is thrown due to the SPI test");
     }
   }
 
-  @SuppressWarnings({ "rawtypes", "unchecked" })
   @SPITest
+  @SuppressWarnings("unchecked")
   public void testWrongKeyType() throws Exception {
-    kvStore2 = factory.newStoreWithEvictionVeto(Eviction.<K, V>all());
+    kvStore2 = factory.newStore();
 
     if (factory.getKeyType() == Object.class) {
       System.err.println("Warning, store uses Object as key type, cannot verify in this configuration");
@@ -101,46 +104,39 @@ public class StoreComputeIfAbsentTest<K, V> extends SPIStoreTester<K, V> {
     } else {
       badKey = "badKey";
     }
-    
+
     try {
-      kvStore2.computeIfAbsent(badKey, new Function() { // wrong key type
-            @Override
-            public Object apply(Object key) {
-              throw new AssertionError();
-            }
-          });
+      // wrong key type
+      kvStore2.computeIfAbsent(badKey, key -> {
+        throw new AssertionError();
+      });
       throw new AssertionError();
     } catch (ClassCastException e) {
       // expected
-    } catch (CacheAccessException e) {
+    } catch (StoreAccessException e) {
       throw new LegalSPITesterException("Warning, an exception is thrown due to the SPI test");
     }
   }
 
   @SPITest
   public void testComputePutsValueInStoreWhenKeyIsAbsent() throws Exception {
-    kvStore = factory.newStoreWithEvictionVeto(Eviction.<K, V>all());
+    kvStore = factory.newStore();
 
     final K key = factory.createKey(1);
     final V value = factory.createValue(1);
 
     assertThat(kvStore.get(key), nullValue());
     try {
-      kvStore.computeIfAbsent(key, new Function<K, V>() {
-        @Override
-        public V apply(K keyParam) {
-          return value;
-        }
-      });
+      kvStore.computeIfAbsent(key, keyParam -> value);
       assertThat(kvStore.get(key).value(), is(value));
-    } catch (CacheAccessException e) {
+    } catch (StoreAccessException e) {
       throw new LegalSPITesterException("Warning, an exception is thrown due to the SPI test");
     }
   }
 
   @SPITest
   public void testFunctionNotInvokedWhenPresent() throws Exception {
-    kvStore = factory.newStoreWithEvictionVeto(Eviction.<K, V>all());
+    kvStore = factory.newStore();
 
     final K key = factory.createKey(1);
     final V value = factory.createValue(1);
@@ -149,13 +145,10 @@ public class StoreComputeIfAbsentTest<K, V> extends SPIStoreTester<K, V> {
 
     // if entry is not absent, the function should not be invoked
     try {
-      kvStore.computeIfAbsent(key, new Function<K, V>() {
-        @Override
-        public V apply(K keyParam) {
-          throw new AssertionError();
-        }
+      kvStore.computeIfAbsent(key, keyParam -> {
+        throw new AssertionError();
       });
-    } catch (CacheAccessException e) {
+    } catch (StoreAccessException e) {
       throw new LegalSPITesterException("Warning, an exception is thrown due to the SPI test");
     }
     assertThat(kvStore.get(key).value(), is(value));
@@ -163,22 +156,19 @@ public class StoreComputeIfAbsentTest<K, V> extends SPIStoreTester<K, V> {
 
   @SPITest
   public void testFunctionReturnsNull() throws Exception {
-    kvStore = factory.newStoreWithEvictionVeto(Eviction.<K, V>all());
+    kvStore = factory.newStore();
 
-    final K key = factory.createKey(1L);;
+    final K key = factory.createKey(1L);
 
     // return null, no effect
     assertThat(kvStore.get(key), nullValue());
     final AtomicBoolean called = new AtomicBoolean();
     try {
-      kvStore.computeIfAbsent(key, new Function<K, V>() {
-        @Override
-        public V apply(K keyParam) {
-          called.set(true);
-          return null;
-        }
+      kvStore.computeIfAbsent(key, keyParam -> {
+        called.set(true);
+        return null;
       });
-    } catch (CacheAccessException e) {
+    } catch (StoreAccessException e) {
       throw new LegalSPITesterException("Warning, an exception is thrown due to the SPI test");
     }
     assertThat(called.get(), is(true));
@@ -187,26 +177,44 @@ public class StoreComputeIfAbsentTest<K, V> extends SPIStoreTester<K, V> {
 
   @SPITest
   public void testException() throws Exception {
-    kvStore = factory.newStoreWithEvictionVeto(Eviction.<K, V>all());
+    kvStore = factory.newStore();
 
-    final K key = factory.createKey(1L);;
+    final K key = factory.createKey(1L);
 
     assertThat(kvStore.get(key), nullValue());
 
     final RuntimeException re = new RuntimeException();
     try {
-      kvStore.computeIfAbsent(key, new Function<K, V>() {
-        @Override
-        public V apply(K keyParam) {
-          throw re;
-        }
+      kvStore.computeIfAbsent(key, keyParam -> {
+        throw re;
       });
     } catch (RuntimeException e) {
       assertThat(e, is(re));
-    } catch (CacheAccessException e) {
+    } catch (StoreAccessException e) {
       throw new LegalSPITesterException("Warning, an exception is thrown due to the SPI test");
     }
 
     assertThat(kvStore.get(key), nullValue());
+  }
+
+  @SPITest
+  public void testComputeIfAbsentValuePresentExpiresOnAccess() throws LegalSPITesterException {
+    TestTimeSource timeSource = new TestTimeSource(10043L);
+    kvStore = factory.newStoreWithExpiry(Expirations.builder().setAccess(Duration.ZERO).build(), timeSource);
+
+    K key = factory.createKey(250928L);
+    V value = factory.createValue(2059820L);
+    final V newValue = factory.createValue(205982025L);
+
+    try {
+      kvStore.put(key, value);
+      Store.ValueHolder<V> result = kvStore.computeIfAbsent(key, k -> {
+        fail("Should not be invoked");
+        return newValue;
+      });
+      assertThat(result.value(), is(value));
+    } catch (StoreAccessException e) {
+      throw new LegalSPITesterException("Warning, an exception is thrown due to the SPI test");
+    }
   }
 }

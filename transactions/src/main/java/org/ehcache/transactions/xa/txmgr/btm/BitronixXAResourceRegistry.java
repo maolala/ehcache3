@@ -15,11 +15,12 @@
  */
 package org.ehcache.transactions.xa.txmgr.btm;
 
-import org.ehcache.internal.concurrent.ConcurrentHashMap;
 import org.ehcache.transactions.xa.txmgr.XAResourceRegistry;
 
-import javax.transaction.xa.XAResource;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
+import javax.transaction.xa.XAResource;
 
 /**
  * Bitronix's BTM {@link XAResourceRegistry} implementation.
@@ -28,7 +29,7 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class BitronixXAResourceRegistry implements XAResourceRegistry {
 
-  private final ConcurrentMap<String, Ehcache3XAResourceProducer> producers = new ConcurrentHashMap<String, Ehcache3XAResourceProducer>();
+  private final ConcurrentMap<String, Ehcache3XAResourceProducer> producers = new ConcurrentHashMap<>();
 
   /**
    * Register an XAResource of a cache with BTM. The first time a XAResource is registered a new

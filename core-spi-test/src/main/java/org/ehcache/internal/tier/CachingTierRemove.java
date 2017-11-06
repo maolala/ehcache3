@@ -16,15 +16,15 @@
 
 package org.ehcache.internal.tier;
 
-import org.ehcache.exceptions.CacheAccessException;
-import org.ehcache.expiry.Expirations;
-import org.ehcache.function.Function;
-import org.ehcache.spi.cache.Store;
-import org.ehcache.spi.cache.tiering.CachingTier;
+import org.ehcache.core.spi.store.StoreAccessException;
+import org.ehcache.core.spi.store.Store;
+import org.ehcache.core.spi.store.tiering.CachingTier;
 import org.ehcache.spi.test.After;
 import org.ehcache.spi.test.Before;
 import org.ehcache.spi.test.LegalSPITesterException;
 import org.ehcache.spi.test.SPITest;
+
+import java.util.function.Function;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -35,13 +35,12 @@ import static org.mockito.Mockito.when;
 /**
  * Test the {@link CachingTier#invalidate(Object)} contract of the
  * {@link CachingTier CachingTier} interface.
- * <p/>
  *
  * @author Aurelien Broszniowski
  */
 public class CachingTierRemove<K, V> extends CachingTierTester<K, V> {
 
-  private CachingTier tier;
+  private CachingTier<K, V> tier;
 
   public CachingTierRemove(final CachingTierFactory<K, V> factory) {
     super(factory);
@@ -73,26 +72,16 @@ public class CachingTierRemove<K, V> extends CachingTierTester<K, V> {
     tier = factory.newCachingTier(1L);
 
     try {
-      tier.getOrComputeIfAbsent(key, new Function<K, Store.ValueHolder<V>>() {
-        @Override
-        public Store.ValueHolder<V> apply(final K k) {
-          return valueHolder;
-        }
-      });
+      tier.getOrComputeIfAbsent(key, k -> valueHolder);
 
       tier.invalidate(key);
 
       final Store.ValueHolder<V> newValueHolder = mock(Store.ValueHolder.class);
       when(newValueHolder.value()).thenReturn(newValue);
-      Store.ValueHolder<V> newReturnedValueHolder = tier.getOrComputeIfAbsent(key, new Function() {
-        @Override
-        public Object apply(final Object o) {
-          return newValueHolder;
-        }
-      });
+      Store.ValueHolder<V> newReturnedValueHolder = tier.getOrComputeIfAbsent(key, o -> newValueHolder);
 
       assertThat(newReturnedValueHolder.value(), is(equalTo(newValueHolder.value())));
-    } catch (CacheAccessException e) {
+    } catch (StoreAccessException e) {
       throw new LegalSPITesterException("Warning, an exception is thrown due to the SPI test");
     }
   }

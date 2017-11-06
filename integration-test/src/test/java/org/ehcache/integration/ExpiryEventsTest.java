@@ -18,12 +18,11 @@ package org.ehcache.integration;
 
 import org.ehcache.Cache;
 import org.ehcache.CacheManager;
-import org.ehcache.CacheManagerBuilder;
-import org.ehcache.config.CacheConfigurationBuilder;
-import org.ehcache.config.ResourcePoolsBuilder;
-import org.ehcache.config.copy.CopierConfiguration;
-import org.ehcache.config.copy.DefaultCopierConfiguration;
-import org.ehcache.config.persistence.CacheManagerPersistenceConfiguration;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.CacheManagerBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
+import org.ehcache.impl.config.copy.DefaultCopierConfiguration;
+import org.ehcache.impl.config.persistence.CacheManagerPersistenceConfiguration;
 import org.ehcache.config.units.EntryUnit;
 import org.ehcache.config.units.MemoryUnit;
 import org.ehcache.event.CacheEvent;
@@ -33,8 +32,8 @@ import org.ehcache.event.EventOrdering;
 import org.ehcache.event.EventType;
 import org.ehcache.expiry.Duration;
 import org.ehcache.expiry.Expirations;
-import org.ehcache.internal.TimeSourceConfiguration;
-import org.ehcache.internal.copy.SerializingCopier;
+import org.ehcache.impl.internal.TimeSourceConfiguration;
+import org.ehcache.impl.copy.SerializingCopier;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -47,6 +46,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
+import static org.ehcache.config.builders.ResourcePoolsBuilder.heap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 
@@ -59,12 +59,12 @@ public class ExpiryEventsTest {
       ResourcePoolsBuilder.newResourcePoolsBuilder().heap(3, EntryUnit.ENTRIES);
 
   private static final CacheConfigurationBuilder<Long, String> byRefCacheConfigBuilder =
-      CacheConfigurationBuilder.<Long, String>newCacheConfigurationBuilder()
-          .withExpiry(Expirations.timeToLiveExpiration(new Duration(1, TimeUnit.SECONDS)));;
+      CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class, heap(10))
+          .withExpiry(Expirations.timeToLiveExpiration(new Duration(1, TimeUnit.SECONDS)));
 
   private static final CacheConfigurationBuilder<Long, String> byValueCacheConfigBuilder =
-      byRefCacheConfigBuilder.add(new DefaultCopierConfiguration<String>(
-          (Class)SerializingCopier.class, CopierConfiguration.Type.VALUE));;
+      byRefCacheConfigBuilder.add(new DefaultCopierConfiguration<>(
+        SerializingCopier.<String>asCopierClass(), DefaultCopierConfiguration.Type.VALUE));
 
   private static final TestTimeSource testTimeSource = new TestTimeSource();
 
@@ -93,7 +93,7 @@ public class ExpiryEventsTest {
   public void testExpiredEventsOnHeapByReference() throws Exception {
 
     Cache<Long, String> testCache = cacheManager.createCache("onHeapCache",
-        byRefCacheConfigBuilder.buildConfig(Long.class, String.class));
+        byRefCacheConfigBuilder.build());
 
     performActualTest(testCache);
  }
@@ -102,7 +102,7 @@ public class ExpiryEventsTest {
   public void testExpiredEventsOnHeapByValue() throws Exception {
 
     Cache<Long, String> testCache = cacheManager.createCache("onHeapCache",
-        byValueCacheConfigBuilder.buildConfig(Long.class, String.class));
+        byValueCacheConfigBuilder.build());
 
     performActualTest(testCache);
   }
@@ -113,7 +113,7 @@ public class ExpiryEventsTest {
     CacheConfigurationBuilder<Long, String> configBuilder = byRefCacheConfigBuilder.withResourcePools(
         resourcePoolsBuilder.offheap(1, MemoryUnit.MB));
     Cache<Long, String> testCache = cacheManager.createCache("onHeapOffHeapCache",
-        configBuilder.buildConfig(Long.class, String.class));
+        configBuilder.build());
 
     performActualTest(testCache);
   }
@@ -124,7 +124,7 @@ public class ExpiryEventsTest {
     CacheConfigurationBuilder<Long, String> configBuilder = byValueCacheConfigBuilder.withResourcePools(
         resourcePoolsBuilder.offheap(1, MemoryUnit.MB));
     Cache<Long, String> testCache = cacheManager.createCache("onHeapOffHeapCache",
-        configBuilder.buildConfig(Long.class, String.class));
+        configBuilder.build());
 
     performActualTest(testCache);
   }
@@ -135,7 +135,7 @@ public class ExpiryEventsTest {
     CacheConfigurationBuilder<Long, String> configBuilder = byRefCacheConfigBuilder.withResourcePools(
         resourcePoolsBuilder.disk(1, MemoryUnit.MB));
     Cache<Long, String> testCache = cacheManager.createCache("onHeapDiskCache",
-        configBuilder.buildConfig(Long.class, String.class));
+        configBuilder.build());
 
     performActualTest(testCache);
   }
@@ -146,7 +146,7 @@ public class ExpiryEventsTest {
     CacheConfigurationBuilder<Long, String> configBuilder = byValueCacheConfigBuilder.withResourcePools(
         resourcePoolsBuilder.disk(1, MemoryUnit.MB));
     Cache<Long, String> testCache = cacheManager.createCache("onHeapDiskCache",
-        configBuilder.buildConfig(Long.class, String.class));
+        configBuilder.build());
 
     performActualTest(testCache);
   }
@@ -157,7 +157,7 @@ public class ExpiryEventsTest {
     CacheConfigurationBuilder<Long, String> configBuilder = byRefCacheConfigBuilder.withResourcePools(
         resourcePoolsBuilder.offheap(1, MemoryUnit.MB).disk(2, MemoryUnit.MB));
     Cache<Long, String> testCache = cacheManager.createCache("onHeapOffHeapDiskCache",
-        configBuilder.buildConfig(Long.class, String.class));
+        configBuilder.build());
 
     performActualTest(testCache);
   }
@@ -168,21 +168,16 @@ public class ExpiryEventsTest {
     CacheConfigurationBuilder<Long, String> configBuilder = byValueCacheConfigBuilder.withResourcePools(
         resourcePoolsBuilder.offheap(1, MemoryUnit.MB).disk(2, MemoryUnit.MB));
     Cache<Long, String> testCache = cacheManager.createCache("onHeapOffHeapDiskCache",
-        configBuilder.buildConfig(Long.class, String.class));
+        configBuilder.build());
 
     performActualTest(testCache);
   }
 
   private void performActualTest(Cache<Long, String> testCache) {
 
-    final List<Long> expiredKeys = new CopyOnWriteArrayList<Long>();
+    final List<Long> expiredKeys = new CopyOnWriteArrayList<>();
 
-    testCache.getRuntimeConfiguration().registerCacheEventListener(new CacheEventListener<Long, String>() {
-      @Override
-      public void onEvent(CacheEvent<Long, String> event) {
-        expiredKeys.add(event.getKey());
-      }
-    }, EventOrdering.ORDERED, EventFiring.SYNCHRONOUS, EnumSet.of(EventType.EXPIRED));
+    testCache.getRuntimeConfiguration().registerCacheEventListener(event -> expiredKeys.add(event.getKey()), EventOrdering.ORDERED, EventFiring.SYNCHRONOUS, EnumSet.of(EventType.EXPIRED));
 
     testCache.put(1L, "one");
     testCache.put(2L, "two");

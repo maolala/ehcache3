@@ -16,9 +16,8 @@
 package org.ehcache.jsr107;
 
 import org.ehcache.config.CacheConfiguration;
-import org.ehcache.config.copy.CopierConfiguration;
-import org.ehcache.config.copy.DefaultCopierConfiguration;
-import org.ehcache.internal.copy.IdentityCopier;
+import org.ehcache.impl.config.copy.DefaultCopierConfiguration;
+import org.ehcache.impl.copy.IdentityCopier;
 import org.ehcache.spi.service.ServiceConfiguration;
 
 import java.io.ObjectStreamException;
@@ -50,7 +49,7 @@ class Eh107CompleteConfiguration<K, V> extends Eh107Configuration<K, V> implemen
   private final boolean isWriteThrough;
   private volatile boolean isStatisticsEnabled;
   private volatile boolean isManagementEnabled;
-  private final List<CacheEntryListenerConfiguration<K, V>> cacheEntryListenerConfigs = new CopyOnWriteArrayList<CacheEntryListenerConfiguration<K, V>>();
+  private final List<CacheEntryListenerConfiguration<K, V>> cacheEntryListenerConfigs = new CopyOnWriteArrayList<>();
   private final Factory<CacheLoader<K, V>> cacheLoaderFactory;
   private final Factory<CacheWriter<? super K, ? super V>> cacheWriterFactory;
   private final Factory<ExpiryPolicy> expiryPolicyFactory;
@@ -108,14 +107,14 @@ class Eh107CompleteConfiguration<K, V> extends Eh107Configuration<K, V> implemen
 
     this.expiryPolicyFactory = tempExpiryPolicyFactory;
   }
-  
+
   private static <K, V> boolean isStoreByValue(Configuration<K, V> config, CacheConfiguration<K, V> ehcacheConfig) {
     if(ehcacheConfig != null) {
       Collection<ServiceConfiguration<?>> serviceConfigurations = ehcacheConfig.getServiceConfigurations();
       for (ServiceConfiguration<?> serviceConfiguration : serviceConfigurations) {
         if (serviceConfiguration instanceof DefaultCopierConfiguration) {
-          DefaultCopierConfiguration copierConfig = (DefaultCopierConfiguration)serviceConfiguration;
-          if(copierConfig.getType().equals(CopierConfiguration.Type.VALUE)) {
+          DefaultCopierConfiguration<?> copierConfig = (DefaultCopierConfiguration)serviceConfiguration;
+          if(copierConfig.getType().equals(DefaultCopierConfiguration.Type.VALUE)) {
             if(copierConfig.getClazz().isAssignableFrom(IdentityCopier.class)) {
               return false;
             } else {
@@ -213,11 +212,8 @@ class Eh107CompleteConfiguration<K, V> extends Eh107Configuration<K, V> implemen
   }
 
   private <T> Factory<T> createThrowingFactory() {
-    return new Factory<T>() {
-      @Override
-      public T create() {
-        throw new UnsupportedOperationException("Cannot convert from Ehcache type to JSR-107 factory");
-      }
+    return (Factory<T>) () -> {
+      throw new UnsupportedOperationException("Cannot convert from Ehcache type to JSR-107 factory");
     };
   }
 }
